@@ -3,6 +3,8 @@ import threading
 import xmlrpc.client
 import time
 import math
+import sys
+from xmlrpc.server import SimpleXMLRPCServer
 
 # table_spec['player'][#] is tuple ((int) stack, (bool) playing, (bool) betting)
 def my_state(table_spec):
@@ -14,8 +16,8 @@ def my_state(table_spec):
 
 
 
-class PlayerControl(threading.Thread)
-    def __init__(self, threadID, name, stack=2000, playing=True, host, port, ai_flag=True):
+class PlayerControl(threading.Thread):
+    def __init__(self, host, port, threadID, name, stack=2000, playing=True, ai_flag=True):
         super(PlayerControl, self).__init__()
         self._server = xmlrpc.client.ServerProxy('http://localhost:8000')
         self.daemon = True
@@ -29,8 +31,11 @@ class PlayerControl(threading.Thread)
         self._hand = []
 
     def run(self):
+        print("creating local server")
         self._server.add_player(self._threadID, self._name, self._stack, self._host, self._port)
+        print("asking for table state")
         table_state = self._server.get_table_state(self._threadID)
+        print(table_state)
         while True:
             table_state_new = self._server.get_table_state(self._threadID)
             if table_state_new != table_state:
@@ -42,7 +47,7 @@ class PlayerControl(threading.Thread)
                 time.sleep(10)
                 continue
 
-    def show_table(self, table_spec):
+    # def show_table(self, table_spec):
 
     def update_localstate(table_state):
         self._stack = table_state.get('stack')
@@ -55,8 +60,8 @@ class PlayerControl(threading.Thread)
 
         if not self._ai_flag:
             if tocall == 0:
-                print "1) Raise"
-                print "2) Check"
+                print("1) Raise")
+                print("2) Check")
                 choice = input("Choose your option: ")
                 if choice == 1:
                     choice2 = input("How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack))
@@ -67,9 +72,9 @@ class PlayerControl(threading.Thread)
                 if choice ==2:
                     move = ('check', 0)
             else:
-                print "1) Raise"
-                print "2) Call"
-                print "3) Fold"
+                print("1) Raise")
+                print("2) Call")
+                print("3) Fold")
             choice = input("Choose your option: ")
             if choice == 1:
                 choice2 = input("How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack))
@@ -97,7 +102,7 @@ class PlayerControl(threading.Thread)
                     move = ('raise', min(bet_size, self._stack))
                 else:
                     move = ('call', tocall)
-            elif bet_size = tocall:
+            elif bet_size == tocall:
                 self._stack -= tocall
                 move = ('call', tocall)
             return move
@@ -107,28 +112,28 @@ class PlayerProxy(object):
     def __init__(self,player):
         self._player = player
 
-    def player_move(self, output_spec):
+    # def player_move(self, output_spec):
 
-    def get_table_state(self, threadID):
+    # def get_table_state(self, threadID):
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("id", type=str, default="1")
     parser.add_argument("host", type=str, default="localhost")
-    parser.add_argument("port", type=str, default="8000")
+    parser.add_argument("port", type=int, default="8000")
+    parser.add_argument("id", type=int, default="1")
     parser.add_argument("ai", type=bool, default=True)
     args = parser.parse_args()
 
     port = args.port + args.id
 
-    player = Player(args.id, "Alice", args.host, port, args.ai)
+    player = PlayerControl(args.host, port, args.id, args.ai)
     player_proxy = PlayerProxy(player)
 
     player.start()
     player.join()
 
-    server = SimpleXMLRPCServer((chost, cport), logRequests=False, allow_none=True)
+    server = SimpleXMLRPCServer((args.host, port), logRequests=False, allow_none=True)
     # server = SimpleXMLRPCServer(("0.0.0.0", 8000), Handler)
     server.register_instance(player_proxy, allow_dotted_names=True)
     # server.register_introspection_functions()
