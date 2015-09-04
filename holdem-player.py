@@ -17,7 +17,7 @@ def my_state(table_spec):
 
 
 class PlayerControl(threading.Thread):
-    def __init__(self, host, port, threadID, name, stack=2000, playing=True, ai_flag=True):
+    def __init__(self, host, port, threadID, name, stack=2000, playing=True, ai_flag=False):
         super(PlayerControl, self).__init__()
         self._server = xmlrpc.client.ServerProxy('http://localhost:8000')
         self.daemon = True
@@ -31,17 +31,18 @@ class PlayerControl(threading.Thread):
         self._hand = []
 
     def run(self):
-        print("creating local server")
-        self._server.add_player(self._threadID, self._name, self._stack, self._host, self._port)
-        print("asking for table state")
+        # self._server.add_player(self._threadID, self._name, self._stack, self._host, self._port)
         table_state = self._server.get_table_state(self._threadID)
         print(table_state)
         while True:
             table_state_new = self._server.get_table_state(self._threadID)
+            print(table_state)
             if table_state_new != table_state:
                 table_state = table_state_new
-                self.show_table(table_state)
+                # self.show_table(table_state)
 
+            self._server.start_game()
+            time.sleep(10)
             if not table_state:
                 print("not in hand... waiting")
                 time.sleep(10)
@@ -107,35 +108,45 @@ class PlayerControl(threading.Thread):
                 move = ('call', tocall)
             return move
 
+    def add_to_server(self):
+        self._server.add_player(self._threadID, self._name, self._stack, self._host, self._port)
 
 class PlayerProxy(object):
     def __init__(self,player):
         self._player = player
 
-    # def player_move(self, output_spec):
+    def player_move(self, output_spec):
+        print(output_spec)
+        return ('raise',50)
 
     # def get_table_state(self, threadID):
-
+    def add_to_server(self):
+        self._player.add_to_server()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("host", type=str, default="localhost")
-    parser.add_argument("port", type=int, default="8000")
-    parser.add_argument("id", type=int, default="1")
+    parser.add_argument("num_players", type=int, default="2")
     parser.add_argument("ai", type=bool, default=True)
     args = parser.parse_args()
 
-    port = args.port + args.id
 
-    player = PlayerControl(args.host, port, args.id, args.ai)
-    player_proxy = PlayerProxy(player)
+    players = []
+    for num in range(args.num_players):
+        player = PlayerControl("localhost", 8001+num, num, args.ai)
+        player_proxy = PlayerProxy(player)
 
-    player.start()
-    player.join()
+        players.append(player)
+        server = SimpleXMLRPCServer(("localhost", 8001+num), logRequests=False, allow_none=True)
+        server.register_instance(player_proxy, allow_dotted_names=True)
+    for player in players:
+        player.add_to_server()
+    for player in players:
+        player.start()
+        player.join()
 
-    server = SimpleXMLRPCServer((args.host, port), logRequests=False, allow_none=True)
+
     # server = SimpleXMLRPCServer(("0.0.0.0", 8000), Handler)
-    server.register_instance(player_proxy, allow_dotted_names=True)
+
     # server.register_introspection_functions()
     try:
         server.serve_forever()
