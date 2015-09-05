@@ -27,16 +27,16 @@ The following is to be implemented
 
 ### Input data
 
-| | Description|
-|:-|:-|
-| Pot | Chips available to win in current hand of play |
-| ToCall | Amout of chips needed to add to pot in order stay in current hand of play |
-| Players | Number of opponents |
-| Stacks | The amount of chips(money) each player has |
-| Pocket cards | Cards in personal hand |
+|                 | Description |
+|:----------------|:------------|
+| Pot             | Chips available to win in current hand of play |
+| ToCall          | Amout of chips needed to add to pot in order stay in current hand of play |
+| Players         | Number of opponents |
+| Stacks          | The amount of chips(money) each player has |
+| Pocket cards    | Cards in personal hand |
 | Community cards | Shared cards available for all players to use |
-| BigBlind | Size of minimum stake |
-| Button | Position of player last to act in a given round |
+| BigBlind        | Size of minimum stake |
+| Button          | Position of player last to act in a given round |
 
 ### Layers
 
@@ -49,11 +49,6 @@ Alternative would be an **80-X-5** setup with the first four outputs in *[0,1]* 
 We plan to teach networks through coevolution + hall-of-fame. We spawn *~10000* random networks and have them compete with each other in 8-seat tables, we pick the top *100* networks and use them to spawn *10000* additional child agents through randomly biased averaging of the parent's weights and repeat with new generation of child agents + hall-of-famers.
 
 The hall-of-fame agents are always preserved and never fall out of use. As the hall-of-fame becomes large, we randomly choose which hall-of-famers to include in the next generation, but the total pool of hall-of-famers is never allowed to diminish.
-
-## Todo:
-* incorporate pot splitting in to holdem game
-* attach neural network
-* implement learning scheme
 
 ## Literature
 * coevolution and hall-of-fame heuristics:
