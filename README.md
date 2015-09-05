@@ -28,7 +28,7 @@ The following is to be implemented
 ### Input data
 
 |                 | Description |
-|:----------------|:------------|
+| :---------------| :-----------|
 | Pot             | Chips available to win in current hand of play |
 | ToCall          | Amout of chips needed to add to pot in order stay in current hand of play |
 | Players         | Number of opponents |
