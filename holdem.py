@@ -3,6 +3,7 @@ import threading
 import xmlrpc.client
 import sys
 from xmlrpc.server import SimpleXMLRPCServer
+from xmlrpc.server import SimpleXMLRPCRequestHandler
 import time
 import random
 
@@ -20,9 +21,9 @@ def card_parse(card_int):
 
 
 
-class Table(threading.Thread):
+class Table(object):
     def __init__(self, host, port, seats = 8, blinds = True, sb = 10, bb = 25):
-        super(Table, self).__init__()
+        # super(Table, self).__init__()
         self._smallblind = sb
         self._bigblind = bb
         self._deck = list(range(52))
@@ -40,6 +41,21 @@ class Table(threading.Thread):
         self._game_running = False
 
         self._lock = threading.Lock()
+        self._run_thread = threading.Thread(target = self.run, args=())
+        self._run_thread.daemon = True
+        self._run_thread.start()
+
+
+    def run(self):
+        while True:
+            players = [player for player in self._seats if player is not None]
+            print("So far ", [player.threadID for player in players], " players have joined the game.")
+            answer = input("Would you like to start?")
+            if answer[0] == 'y':
+                self.start_game()
+            else:
+                time.sleep(1)
+
 
     def start_game(self):
         with self._lock:
@@ -47,10 +63,9 @@ class Table(threading.Thread):
             print("players:", players)
             players_playing = [player for player in players if player.playing()]
             print("players_playing:", players_playing)
-            print("before run loop")
             while len(players_playing)>1:
                 self._game_running = True
-                print("inside run loop")
+                print("inside game loop")
                 current_player = players_playing.index(self._seats[self._button])
                 current_player = (current_player + 1) % len(players_playing)
                 print("players_playing", [player.threadID for player in players_playing])
@@ -61,7 +76,7 @@ class Table(threading.Thread):
                 else:
                     players_playing[current_player].bet(self._smallblind)
                     self._pot += self._smallblind
-                print("posted small blind, pot side:", self._pot)
+                print("posted small blind, pot size:", self._pot)
                 current_player = (current_player + 1) % len(players_playing)
                 # big blind
                 if self._bigblind> players_playing[current_player].stack:
@@ -70,7 +85,7 @@ class Table(threading.Thread):
                 else:
                     players_playing[current_player].bet(self._bigblind)
                     self._pot += self._bigblind
-                print("posted big blind, pot side:", self._pot)
+                print("posted big blind, pot size:", self._pot)
                 self._tocall = self._bigblind
 
                 self._round = 0
@@ -87,9 +102,14 @@ class Table(threading.Thread):
 
                     # send player board state and ask for their response
                     state = self.output_state(players_playing[current_player].threadID)
-                    print('got state',state)
+                    # print("got state",state)
+                    print("requesting move from player ", players_playing[current_player].threadID)
+
                     move = players_playing[current_player].server.player_move(state)
+
+                    print("Got move from player ", players_playing[current_player].threadID)
                     print(players_playing[current_player].threadID, move)
+
                     if move[0] in ['call', 'raise', 'check']:
                         players_playing[current_player].bet(move[1])
                         players_playing[current_player].playedthisround
@@ -323,7 +343,7 @@ class Table(threading.Thread):
             self._button = (self._button + 1) % len(self._seats)
 
     def output_state(self, threadID):
-        print("inside output state")
+        # print("inside output state")
         return {'players':[player.player_state() for player in self._player_dict.values() if player.threadID != threadID], 'community':self._community, 'pocket_cards':self._player_dict[threadID].pocket_cards(), 'pot':self._pot, 'button':self._button, 'tocall':self._tocall, 'stack':self._player_dict[threadID].stack, 'bigblind':self._bigblind, 'threadID':threadID}
 
 class Player(object):
@@ -339,9 +359,10 @@ class Player(object):
         self._isbetting = False
         self.playedthisround = False
         self.myturn = False
+        # self.seat
 
-        address = "http://%s:%s" % (host, port)
-        self.server = xmlrpc.client.ServerProxy(address)
+        self._address = "http://%s:%s" % (host, port)
+        self.server = xmlrpc.client.ServerProxy(self._address)
         self.handrank = 0
 
 
@@ -369,13 +390,13 @@ class Player(object):
         return self._isbetting
 
     def player_state(self):
-        return (self.stack, self.playing(), self.betting())
+        return (self.threadID, self.stack, self.playing(), self.betting())
 
 class TableProxy(object):
     def __init__(self, table):
         self._table = table
     def get_table_state(self, threadID):
-        print("inside get_table_state in tableproxy")
+        # print("inside get_table_state in tableproxy")
         return self._table.output_state(threadID)
 
     def add_player(self, threadID, name, stack, host, port):
@@ -385,6 +406,9 @@ class TableProxy(object):
         self._table.start_game()
 
     # def player_move(self, threadID, result):
+
+class RequestHandler(SimpleXMLRPCRequestHandler):
+    rpc_paths = ()
 
 if __name__ == '__main__':
     # parser = argparse.ArgumentParser()
@@ -461,8 +485,9 @@ if __name__ == '__main__':
 
     table_proxy = TableProxy(table)
 
-    server = SimpleXMLRPCServer(("localhost", 8000), logRequests=False, allow_none=True)
+    server = SimpleXMLRPCServer(("localhost", 8000), logRequests=False, allow_none=True, requestHandler=RequestHandler)
     server.register_instance(table_proxy, allow_dotted_names=True)
+
 
     # table.start()
     # table.join()

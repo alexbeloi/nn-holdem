@@ -4,21 +4,20 @@ import xmlrpc.client
 import time
 import math
 import sys
+import holdem
 from xmlrpc.server import SimpleXMLRPCServer
 
-# table_spec['player'][#] is tuple ((int) stack, (bool) playing, (bool) betting)
-def my_state(table_spec):
-    players = table_spec.get('players', None)
-    pocket_cards = table_spec.get('pocket_cards', None)
-    pot = table_spec.get('pot', None)
-    button = table_spec.get('button', None)
-    tocall = table_spec.get('tocall', None)
+# table_spec['players'][#] is tuple ((int) threadID, (int) stack, (bool) playing, (bool) betting)
+# def my_state(table_spec):
+#     players = table_spec.get('players', None)
+#     pocket_cards = table_spec.get('pocket_cards', None)
+#     pot = table_spec.get('pot', None)
+#     button = table_spec.get('button', None)
+#     tocall = table_spec.get('tocall', None)
 
-
-
-class PlayerControl(threading.Thread):
+class PlayerControl(object):
     def __init__(self, host, port, threadID, name, stack=2000, playing=True, ai_flag=False):
-        super(PlayerControl, self).__init__()
+        # super(PlayerControl, self).__init__()
         self._server = xmlrpc.client.ServerProxy('http://localhost:8000')
         self.daemon = True
 
@@ -30,33 +29,49 @@ class PlayerControl(threading.Thread):
         self._stack =  stack
         self._hand = []
 
+        self._run_thread = threading.Thread(target = self.run, args=())
+        self._run_thread.daemon = True
+        self._run_thread.start()
+
     def run(self):
-        # self._server.add_player(self._threadID, self._name, self._stack, self._host, self._port)
+        print("Player ", self._threadID, " Joining game")
+        self._server.add_player(self._threadID, self._name, self._stack, self._host, self._port)
         table_state = self._server.get_table_state(self._threadID)
-        print(table_state)
+        # print(table_state)
         while True:
             table_state_new = self._server.get_table_state(self._threadID)
-            print(table_state)
+            # print(table_state)
             if table_state_new != table_state:
                 table_state = table_state_new
                 # self.show_table(table_state)
-
-            self._server.start_game()
             time.sleep(10)
             if not table_state:
                 print("not in hand... waiting")
                 time.sleep(10)
                 continue
 
-    # def show_table(self, table_spec):
+    def show_table(self, table_spec):
+        # print player stacks and inf (playing/betting)
+        # players = [player for player in table_spec.get('players', None) if player != None]
+        print("Stacks:")
+        for player in table_spec.get('players', None):
+            print(player[0], ": ", player[1], end="")
+            if player[2] == True:
+                print("(P)", end="")
+            if player[3] == True:
+                print("(B)")
+        print("Community cards: ", map(holdem.card_parse, table_spec.get('community', None)))
+        print("Pot size: ", table_spec.get('pot', None))
+        print("Pocket cards: ", map(holdem.card_parse, table_spec.get('pocket_cards', None)))
+        print("To call: ", table_spec.get('tocall', None))
 
-    def update_localstate(table_state):
+    def update_localstate(self, table_state):
         self._stack = table_state.get('stack')
         self._hand = table_state.get('pocket')
 
     def player_move(self, table_state):
-        update_localstate(table_state)
-        show_table(table_state)
+        self.update_localstate(table_state)
+        self.show_table(table_state)
         tocall = table_state.get('tocall')
 
         if not self._ai_flag:
@@ -108,41 +123,32 @@ class PlayerControl(threading.Thread):
                 move = ('call', tocall)
             return move
 
-    def add_to_server(self):
-        self._server.add_player(self._threadID, self._name, self._stack, self._host, self._port)
-
 class PlayerProxy(object):
     def __init__(self,player):
         self._player = player
 
     def player_move(self, output_spec):
-        print(output_spec)
-        return ('raise',50)
+        return self._player.player_move(output_spec)
 
     # def get_table_state(self, threadID):
-    def add_to_server(self):
-        self._player.add_to_server()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("num_players", type=int, default="2")
+    parser.add_argument("id", type=int, default="2")
     parser.add_argument("ai", type=bool, default=True)
     args = parser.parse_args()
 
+    player = PlayerControl("localhost", 8001+args.id, args.id, args.ai)
+    player_proxy = PlayerProxy(player)
 
-    players = []
-    for num in range(args.num_players):
-        player = PlayerControl("localhost", 8001+num, num, args.ai)
-        player_proxy = PlayerProxy(player)
+    server = SimpleXMLRPCServer(("localhost", 8001+args.id), logRequests=False, allow_none=True)
+    server.register_instance(player_proxy, allow_dotted_names=True)
 
-        players.append(player)
-        server = SimpleXMLRPCServer(("localhost", 8001+num), logRequests=False, allow_none=True)
-        server.register_instance(player_proxy, allow_dotted_names=True)
-    for player in players:
-        player.add_to_server()
-    for player in players:
-        player.start()
-        player.join()
+    # for player in players:
+    #     player.start()
+    #
+    # for player in players:
+    #     player.join()
 
 
     # server = SimpleXMLRPCServer(("0.0.0.0", 8000), Handler)
