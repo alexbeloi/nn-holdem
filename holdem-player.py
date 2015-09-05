@@ -59,7 +59,8 @@ class PlayerControl(object):
             if player[2] == True:
                 print("(P)", end="")
             if player[3] == True:
-                print("(B)")
+                print("(B)", end="")
+            print("")
         print("Community cards: ", map(holdem.card_parse, table_spec.get('community', None)))
         print("Pot size: ", table_spec.get('pot', None))
         print("Pocket cards: ", map(holdem.card_parse, table_spec.get('pocket_cards', None)))
@@ -73,55 +74,56 @@ class PlayerControl(object):
         self.update_localstate(table_state)
         self.show_table(table_state)
         tocall = table_state.get('tocall')
+        move_tuple = ('test', 0)
 
         if not self._ai_flag:
             if tocall == 0:
                 print("1) Raise")
                 print("2) Check")
-                choice = input("Choose your option: ")
+                choice = int(input("Choose your option: "))
                 if choice == 1:
-                    choice2 = input("How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack))
+                    choice2 = int(input("How much would you like to raise to? (min = {}, max = {})".format(tocall,self._stack)))
                     while choice2 < tocall:
-                        choice2 = input("(Invalid input) How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack))
-                    move = ('raise',min(choice2, self._stack))
+                        choice2 = int(input("(Invalid input) How much would you like to raise? (min = {}, max = {})".format(max(tocall, table_state.get('bigblind')),self._stack)))
+                    move_tuple = ('raise',min(choice2, self._stack))
                     self._stack -= choice2
-                if choice ==2:
-                    move = ('check', 0)
+                if choice == 2:
+                  move_tuple = ('check', 0)
             else:
                 print("1) Raise")
                 print("2) Call")
                 print("3) Fold")
-            choice = input("Choose your option: ")
-            if choice == 1:
-                choice2 = input("How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack))
-                while choice2 < tocall:
-                    choice2 = input("(Invalid input) How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack))
-                move = ('raise',min(choice2, self._stack))
-                self._stack -= choice2
-            elif choice == 2:
-                move = ('call', tocall)
-                self._stack -= tocall
-            elif choice == 3:
-                move = ('fold', -1)
-            return move
+                choice = int(input("Choose your option: "))
+                if choice == 1:
+                    choice2 = int(input("How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack)))
+                    while choice2 < tocall:
+                        choice2 = int(input("(Invalid input) How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack)))
+                    move_tuple = ('raise',min(choice2, self._stack))
+                    self._stack -= choice2
+                elif choice == 2:
+                    move_tuple = ('call', tocall)
+                    self._stack -= tocall
+                elif choice == 3:
+                   move_tuple = ('fold', -1)
+
         else:
             bet_size = nnholdem(table_state)
             if bet_size < tocall:
                 if bet_size >= self._stack:
-                    move = ('allin', self._stack)
+                    move_tuple = ('allin', self._stack)
                 else:
-                    move = ('fold',-1)
+                    move_tuple = ('fold',-1)
             elif bet_size > tocall:
                 bet_size -= bet_size % table_state.get('bigblind')
                 if bet_size >tocall:
                     self._stack -= min(bet_size, self._stack)
-                    move = ('raise', min(bet_size, self._stack))
+                    move_tuple = ('raise', min(bet_size, self._stack))
                 else:
-                    move = ('call', tocall)
+                    move_tuple = ('call', tocall)
             elif bet_size == tocall:
                 self._stack -= tocall
-                move = ('call', tocall)
-            return move
+                move_tuple = ('call', tocall)
+        return move_tuple
 
 class PlayerProxy(object):
     def __init__(self,player):
@@ -129,8 +131,6 @@ class PlayerProxy(object):
 
     def player_move(self, output_spec):
         return self._player.player_move(output_spec)
-
-    # def get_table_state(self, threadID):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

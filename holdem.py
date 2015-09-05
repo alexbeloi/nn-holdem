@@ -38,8 +38,6 @@ class Table(object):
         self._seats = [None]*seats
         self._player_dict = {}
 
-        self._game_running = False
-
         self._lock = threading.Lock()
         self._run_thread = threading.Thread(target = self.run, args=())
         self._run_thread.daemon = True
@@ -63,12 +61,16 @@ class Table(object):
             print("players:", players)
             players_playing = [player for player in players if player.playing()]
             print("players_playing:", players_playing)
+
+            self.new_round()
+            self._round=0
+
             while len(players_playing)>1:
-                self._game_running = True
-                print("inside game loop")
                 current_player = players_playing.index(self._seats[self._button])
                 current_player = (current_player + 1) % len(players_playing)
-                print("players_playing", [player.threadID for player in players_playing])
+
+                # print("players_playing", [player.threadID for player in players_playing])
+
                 # small blind
                 if self._smallblind> players_playing[current_player].stack:
                     self._pot += players_playing[current_player].stack
@@ -78,6 +80,7 @@ class Table(object):
                     self._pot += self._smallblind
                 print("posted small blind, pot size:", self._pot)
                 current_player = (current_player + 1) % len(players_playing)
+
                 # big blind
                 if self._bigblind> players_playing[current_player].stack:
                     self._pot += players_playing[current_player].stack
@@ -89,185 +92,80 @@ class Table(object):
                 self._tocall = self._bigblind
 
                 self._round = 0
-                # deal phase
-                print("Dealing")
-                self.deal()
-                current_player = (current_player + 1) % len(players_playing)
-                while not players_playing[current_player].playedthisround:
+                while self._round<4
+                    if self._round == 0:
+                        # deal phase
+                        print("Dealing")
+                        self.deal()
+                    elif self._round == 1:
+                        # floph phase
+                        print("Flop")
+                        self.flop()
+                    elif self._round == 2:
+                        # turn phase
+                        print("Turn")
+                        self.turn()
+                    elif self._round ==3:
+                        # river phase
+                        print("River")
+                        self.river()
 
-                    # if current players is all in, skip their turn and go to the next player
-                    if players_playing[current_player].isallin:
-                        current_player = (current_player + 1) % len(players_playing)
-                        continue
+                    current_player = (current_player + 1) % len(players_playing)
+                    while not players_playing[current_player].playedthisround:
 
-                    # send player board state and ask for their response
-                    state = self.output_state(players_playing[current_player].threadID)
-                    # print("got state",state)
-                    print("requesting move from player ", players_playing[current_player].threadID)
+                        # if current players is all in, skip their turn and go to the next player
+                        if players_playing[current_player].isallin:
+                            current_player = (current_player + 1) % len(players_playing)
+                            continue
 
-                    move = players_playing[current_player].server.player_move(state)
+                        # send player board state and ask for their response
+                        state = self.output_state(players_playing[current_player].threadID)
+                        # print("got state",state)
+                        print("requesting move from player ", players_playing[current_player].threadID)
 
-                    print("Got move from player ", players_playing[current_player].threadID)
-                    print(players_playing[current_player].threadID, move)
+                        move = players_playing[current_player].server.player_move(state)
 
-                    if move[0] in ['call', 'raise', 'check']:
-                        players_playing[current_player].bet(move[1])
-                        players_playing[current_player].playedthisround
-                        #if raise occurered, everybody else must respond
-                        if move[0] == 'raise':
-                            for player in players_playing:
-                                if player != players_playing[current_player]:
-                                    player.playedthisround = False
-                            self._tocall = move[1]
-                        self._pot += move[1]
+                        print("Got move from player ", players_playing[current_player].threadID)
+                        print(players_playing[current_player].threadID, move)
 
-
-                        current_player = (current_player + 1) % len(players_playing)
-                    elif move[1] <0:
-                        players_playing.pop(current_player)
-
-                #break if a single player left
-                if len(players_playing)==1:
-                    break
-
-                # flop phase
-                # reset playedthisround flags
-                for player in self._seats:
-                    player.playedthisround = False
-
-                self._round=1
-                print("Flop")
-                self.flop()
-
-                # determine first player to act in list players_playing
-                temp = self._button
-                temp = temp + 1 % len(self._seats)
-                while not self._seats[temp].playing():
-                    temp = temp +1 % len(self._seats)
-                current_player = players_playing.index(self._seats[temp])
-
-                while not players_playing[current_player].playedthisround:
-
-                    # if current players is all in, skip their turn and go to the next player
-                    if players_playing[current_player].isallin:
-                        current_player = (current_player + 1) % len(players_playing)
-                        continue
-
-                    state = self.output_state(players_playing[current_player].threadID)
-                    move = players_playing[current_player].server.player_move(state)
-                    print(players_playing[current_player].threadID, move)
-                    if move[0] in ['call', 'raise', 'check']:
-                        players_playing[current_player].bet(move[1])
-                        players_playing[current_player].playedthisround
-                        #if raise occurered, everybody else must respond
-                        if move[0] == 'raise':
-                            for player in players_playing:
-                                if player != players_playing[current_player]:
-                                    player.playedthisround = False
-                            self._tocall = move[1]
-                        self._pot += move[1]
+                        if move[0] in ['call', 'raise', 'check']:
+                            players_playing[current_player].bet(move[1])
+                            players_playing[current_player].playedthisround = True
+                            #if raise occurered, everybody else must respond
+                            if move[0] == 'raise':
+                                for player in players_playing:
+                                    if player != players_playing[current_player]:
+                                        player.playedthisround = False
+                                self._tocall = move[1]
+                            self._pot += move[1]
 
 
-                        current_player = (current_player + 1) % len(players_playing)
-                    elif move[1] <0:
-                        players_playing.pop(current_player)
+                            current_player = (current_player + 1) % len(players_playing)
+                        elif move[0] == 'fold':
+                            players_playing.pop(current_player)
+                            current_player = current_player % len(players_playing)
 
-                #break if a single player left
-                if len(players_playing)==1:
-                    break
+                    # determine first player to act in list players_playing
+                    temp = self._button
+                    temp = temp + 1 % len(self._seats)
+                    while not self._seats[temp].playing():
+                        temp = temp +1 % len(self._seats)
+                    current_player = players_playing.index(self._seats[temp])
 
-                self._round=2
-                # turn phase
-                # reset playedthisround flags
-                for player in self._seats:
-                    player.playedthisround = False
+                    #break if a single player left
+                    if len(players_playing)==1:
+                        break
 
-                print("Turn")
-                self.turn()
-
-                # determine first player to act in list players_playing
-                temp = self._button
-                temp = temp + 1 % len(self._seats)
-                while not self._seats[temp].playing():
-                    temp = temp +1 % len(self._seats)
-                current_player = players_playing.index(self._seats[temp])
-
-                while not players_playing[current_player].playedthisround:
-
-                    # if current players is all in, skip their turn and go to the next player
-                    if players_playing[current_player].isallin:
-                        current_player = (current_player + 1) % len(players_playing)
-                        continue
-
-                    state = self.output_state(players_playing[current_player].threadID)
-                    move = players_playing[current_player].server.player_move(state)
-                    print(players_playing[current_player].threadID, move)
-                    if move[0] in ['call', 'raise', 'check']:
-                        players_playing[current_player].bet(move[1])
-                        players_playing[current_player].playedthisround
-                        #if raise occurered, everybody else must respond
-                        if move[0] == 'raise':
-                            for player in players_playing:
-                                if player != players_playing[current_player]:
-                                    player.playedthisround = False
-                            self._tocall = move[1]
-                        self._pot += move[1]
+                    self.new_round()
 
 
-                        current_player = (current_player + 1) % len(players_playing)
-                    elif move[1] <0:
-                        players_playing.pop(current_player)
-
-                #break if a single player left
-                if len(players_playing)==1:
-                    break
-
-                self._round=3
-                # river phase
-                # reset playedthisround flags
-                for player in self._seats:
-                    player.playedthisround = False
-
-                print("river")
-                self.river()
-
-                # determine first player to act in list players_playing
-                temp = self._button
-                temp = temp + 1 % len(self._seats)
-                while not self._seats[temp].playing():
-                    temp = temp +1 % len(self._seats)
-                current_player = players_playing.index(self._seats[temp])
-
-                while not players_playing[current_player].playedthisround:
-
-                    # if current players is all in, skip their turn and go to the next player
-                    if players_playing[current_player].isallin:
-                        current_player = (current_player + 1) % len(players_playing)
-                        continue
-
-                    state = self.output_state(players_playing[current_player].threadID)
-                    move = players_playing[current_player].server.player_move(state)
-                    print(players_playing[current_player].threadID, move)
-                    if move[0] in ['call', 'raise', 'check']:
-                        players_playing[current_player].bet(move[1])
-                        players_playing[current_player].playedthisround
-                        #if raise occurered, everybody else must respond
-                        if move[0] == 'raise':
-                            for player in players_playing:
-                                if player != players_playing[current_player]:
-                                    player.playedthisround = False
-                            self._tocall = move[1]
-                        self._pot += move[1]
-
-                        current_player = (current_player + 1) % len(players_playing)
-                    elif move[1] <0:
-                        players_playing.pop(current_player)
+                # resolve the game and move the button
                 resolve_game(players_playing)
                 self._button = self.button + 1 % len(self._seats)
-                self._game_running = False
 
     def resolve_game(self, players_playing):
         if len(players_playing)==1:
+            print("player ", players_playing[0].threadID, " wins the pot (", self._pot, ")")
             players_playing[0].refund(self._pot)
             self._pot = 0
         else:
@@ -286,9 +184,6 @@ class Table(object):
                 players_playing[i].refund(self._pot/len(max_idx))
                 self._pot -= self._pot/len(max_idx)
 
-    def get_game_running(self):
-        return self._game_running
-
     def deal(self):
         for player in self._seats:
             if player != None:
@@ -298,6 +193,12 @@ class Table(object):
             if player != None:
                 if player.playing():
                     player.addtohand(self._get_card())
+
+    def new_round(self):
+        for player in self._player_dict.values():
+            player.currentbet = 0
+            player.playedthisround = False
+        self._round += 1
 
     def flop(self):
         self._discard.append(self._get_card()) #burn
@@ -344,7 +245,7 @@ class Table(object):
 
     def output_state(self, threadID):
         # print("inside output state")
-        return {'players':[player.player_state() for player in self._player_dict.values() if player.threadID != threadID], 'community':self._community, 'pocket_cards':self._player_dict[threadID].pocket_cards(), 'pot':self._pot, 'button':self._button, 'tocall':self._tocall, 'stack':self._player_dict[threadID].stack, 'bigblind':self._bigblind, 'threadID':threadID}
+        return {'players':[player.player_state() for player in self._player_dict.values() if player.threadID != threadID], 'community':self._community, 'pocket_cards':self._player_dict[threadID].pocket_cards(), 'pot':self._pot, 'button':self._button, 'tocall':(self._tocall-self._player_dict[threadID].currentbet), 'stack':self._player_dict[threadID].stack, 'bigblind':self._bigblind, 'threadID':threadID}
 
 class Player(object):
     def __init__(self, threadID, name, stack, host, port):
@@ -357,6 +258,7 @@ class Player(object):
         self.isallin = False
         self._isplaying = True
         self._isbetting = False
+        self.currentbet = 0
         self.playedthisround = False
         self.myturn = False
         # self.seat
@@ -379,7 +281,9 @@ class Player(object):
         return self._isplaying
 
     def bet(self, bet_size):
-        self.stack -= bet_size
+        temp = min(bet_size, self.stack)
+        self.stack -= temp
+        self.currentbet += temp
         if self.stack <= 0:
             self.isallin = True
 
