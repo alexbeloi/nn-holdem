@@ -61,9 +61,9 @@ class PlayerControl(object):
             if player[3] == True:
                 print("(B)", end="")
             print("")
-        print("Community cards: ", map(holdem.card_parse, table_spec.get('community', None)))
+        print("Community cards: ", [holdem.card_parse(card) for card in table_spec.get('community', None)])
         print("Pot size: ", table_spec.get('pot', None))
-        print("Pocket cards: ", map(holdem.card_parse, table_spec.get('pocket_cards', None)))
+        print("Pocket cards: ", [holdem.card_parse(card) for card in table_spec.get('pocket_cards', None)])
         print("To call: ", table_spec.get('tocall', None))
 
     def update_localstate(self, table_state):

@@ -13,8 +13,8 @@ suit_dict = {0:'c', 1:'d', 2:'h', 3:'s'}
 
 def card_parse(card_int):
     try:
-        card_rank = card_int % 12
-        card_suit = card_int/12
+        card_rank = card_int % 13
+        card_suit = int(card_int/13)
     except TypeError:
         print('Trying to parse a card, was expecting Integer instead got:', type(card_int))
     return card_dict[card_rank]+suit_dict[card_suit]
@@ -92,7 +92,7 @@ class Table(object):
                 self._tocall = self._bigblind
 
                 self._round = 0
-                while self._round<4
+                while self._round<4:
                     if self._round == 0:
                         # deal phase
                         print("Dealing")
@@ -119,14 +119,14 @@ class Table(object):
                             continue
 
                         # send player board state and ask for their response
-                        state = self.output_state(players_playing[current_player].threadID)
+                        state = self.output_state(players_playing[current_player])
                         # print("got state",state)
-                        print("requesting move from player ", players_playing[current_player].threadID)
+                        # print("requesting move from player ", players_playing[current_player].threadID)
 
                         move = players_playing[current_player].server.player_move(state)
 
-                        print("Got move from player ", players_playing[current_player].threadID)
-                        print(players_playing[current_player].threadID, move)
+                        # print("Got move from player ", players_playing[current_player].threadID)
+                        print("Player ", players_playing[current_player].threadID, "decides to ", , move)
 
                         if move[0] in ['call', 'raise', 'check']:
                             players_playing[current_player].bet(move[1])
@@ -160,8 +160,8 @@ class Table(object):
 
 
                 # resolve the game and move the button
-                resolve_game(players_playing)
-                self._button = self.button + 1 % len(self._seats)
+                self.resolve_game(players_playing)
+                self._button = self._button + 1 % len(self._seats)
 
     def resolve_game(self, players_playing):
         if len(players_playing)==1:
@@ -199,6 +199,7 @@ class Table(object):
             player.currentbet = 0
             player.playedthisround = False
         self._round += 1
+        self._tocall = 0
 
     def flop(self):
         self._discard.append(self._get_card()) #burn
@@ -243,9 +244,9 @@ class Table(object):
         while not self._seats[self._button].playing():
             self._button = (self._button + 1) % len(self._seats)
 
-    def output_state(self, threadID):
+    def output_state(self, current_player):
         # print("inside output state")
-        return {'players':[player.player_state() for player in self._player_dict.values() if player.threadID != threadID], 'community':self._community, 'pocket_cards':self._player_dict[threadID].pocket_cards(), 'pot':self._pot, 'button':self._button, 'tocall':(self._tocall-self._player_dict[threadID].currentbet), 'stack':self._player_dict[threadID].stack, 'bigblind':self._bigblind, 'threadID':threadID}
+        return {'players':[player.player_state() for player in self._player_dict.values() if player != current_player], 'community':self._community, 'pocket_cards':current_player.pocket_cards(), 'pot':self._pot, 'button':self._button, 'tocall':(self._tocall-current_player.currentbet), 'stack':current_player.stack, 'bigblind':self._bigblind, 'threadID':current_player.threadID}
 
 class Player(object):
     def __init__(self, threadID, name, stack, host, port):
@@ -301,7 +302,7 @@ class TableProxy(object):
         self._table = table
     def get_table_state(self, threadID):
         # print("inside get_table_state in tableproxy")
-        return self._table.output_state(threadID)
+        return self._table.output_state(table._player_dict.get(threadID, None))
 
     def add_player(self, threadID, name, stack, host, port):
         self._table.add_player(threadID, name, stack, host, port)
