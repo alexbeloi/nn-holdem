@@ -2,14 +2,13 @@ import argparse
 import threading
 import xmlrpc.client
 import sys
-from xmlrpc.server import SimpleXMLRPCServer
-from xmlrpc.server import SimpleXMLRPCRequestHandler
 import time
 import random
-
-card_dict = {0:'2', 1:'3', 2:'4', 3:'5', 4:'6', 5:'7', 6:'8', 7:'9', 8:'J', 9:'Q', 10:'K', 11:'A'}
-suit_dict = {0:'c', 1:'d', 2:'h', 3:'s'}
-
+from past import autotranslate
+# autotranslate(['Card','Deck','Evaluator'])
+from deuces.deuces import Card, Deck, Evaluator
+from xmlrpc.server import SimpleXMLRPCServer
+from xmlrpc.server import SimpleXMLRPCRequestHandler
 
 def card_parse(card_int):
     try:
@@ -21,22 +20,22 @@ def card_parse(card_int):
 
 class Table(object):
     def __init__(self, host, port, seats = 8, blinds = True, sb = 10, bb = 25):
-        # super(Table, self).__init__()
         self._smallblind = sb
         self._bigblind = bb
-        self._deck = list(range(52))
+        self._deck = Deck()
+        self._evaluator = Evaluator()
 
         self._round = 0
         self._button = 0
         self._discard = []
-        self._community = []
+        self.community = []
         self._side_pots = [0]*(seats-1)
         self._totalpot = 0
         self._current_pot = 0
         self._tocall = 0
+        self._lastraise = 0
 
         self._seats = [Player(-1,-1,0,"empty",0,True) for _ in range(seats)]
-        # self._seats = [None]*seats
         self._player_dict = {}
 
         self._lock = threading.Lock()
@@ -45,23 +44,30 @@ class Table(object):
         self._run_thread.start()
 
     def player_bet(self, player, bet_size):
-        player.bet(min(player.stack, bet_size))
-        self._tocall = min(player.stack, bet_size)
-        self._totalpot = sum(self._side_pots)
+        temp_betsize = min(player.stack, bet_size)
+        self._totalpot += temp_betsize - player.currentbet
+        player.bet(temp_betsize)
+        print("player ", player.playerID ,"currently betting ", player.currentbet)
+        print("bet size: ", temp_betsize)
+
+        self._tocall = max(self._tocall, temp_betsize)
+        self._lastraise = max(self._bigblind, temp_betsize  - self._tocall)
 
     def resolve_sidepots(self, players_playing):
+        if players_playing == []:
+            self._current_pot -= 1
+            return
         smallest_bet = min([player.currentbet for player in players_playing])
         self._side_pots[self._current_pot] += smallest_bet*len(players_playing)
         for player in players_playing:
             player.currentbet -= smallest_bet
+            if player.currentbet == 0:
+                player.lastsidepot = self._current_pot
         if len(players_playing) == 1:
             player.refund(player.currentbet)
-        elif min([player.currentbet for player in players_playing]) != 0:
-            for player in players_playing:
-                if player.currentbet == 0:
-                    player.lastsidepot = self._current_pot
-            self._current_pot += self._current_pot
-            self.resolve_sidepots(self, [player for player in players_playing if player.currentbet >0])
+        else:
+            self._current_pot += 1
+            self.resolve_sidepots([player for player in players_playing if player.currentbet >0])
         self._totalpot = sum(self._side_pots)
 
     def run(self):
@@ -81,6 +87,7 @@ class Table(object):
             else:
                 time.sleep(1)
 
+    # refactor to not use indices
     def start_game(self):
         with self._lock:
             players_playing = [player for player in self._seats if player.playing_hand]
@@ -94,32 +101,13 @@ class Table(object):
 
                 # small blind
                 self.player_bet(players_playing[current_player], self._smallblind)
+                players_playing[current_player].playedthisround = False
                 current_player = (current_player + 1) % len(players_playing)
 
                 # big blind
                 self.player_bet(players_playing[current_player], self._bigblind)
+                players_playing[current_player].playedthisround = False
                 current_player = (current_player + 1) % len(players_playing)
-
-                # # small blind
-                # if self._smallblind> players_playing[current_player].stack:
-                #     self._pot += players_playing[current_player].stack
-                #     players_playing[current_player].isallin = True
-                #     players_playing[current_player].bet(players_playing[current_player].stack)
-                # else:
-                #     players_playing[current_player].bet(self._smallblind)
-                #     self._pot += self._smallblind
-                # print("posted small blind, pot size:", self._pot)
-                # current_player = (current_player + 1) % len(players_playing)
-                #
-                # # big blind
-                # if self._bigblind> players_playing[current_player].stack:
-                #     self._pot += players_playing[current_player].stack
-                #     players_playing[current_player].bet(players_playing[current_player].stack)
-                # else:
-                #     players_playing[current_player].bet(self._bigblind)
-                #     self._pot += self._bigblind
-                # print("posted big blind, pot size:", self._pot)
-                # current_player = (current_player + 1) % len(players_playing)
 
                 self._tocall = self._bigblind
                 # rounds
@@ -155,18 +143,23 @@ class Table(object):
 
                         print("Player ", players_playing[current_player].playerID, "decides to ",  move)
 
-                        if move[0] in ['call', 'raise', 'check']:
+                        if move[0] == 'call':
+                            self.player_bet(players_playing[current_player], self._tocall)
+                            current_player = (current_player + 1) % len(players_playing)
+                        elif move[0] == 'check':
+                            self.player_bet(players_playing[current_player], players_playing[current_player].currentbet)
+                            current_player = (current_player + 1) % len(players_playing)
+                        #if raise occurered, everybody else must respond
+                        elif move[0] == 'raise':
                             self.player_bet(players_playing[current_player], move[1])
-                            #if raise occurered, everybody else must respond
-                            if move[0] == 'raise':
-                                for player in players_playing:
-                                    if player != players_playing[current_player]:
-                                        player.playedthisround = False
-                                self._tocall = move[1]
+                            for player in players_playing:
+                                if player != players_playing[current_player]:
+                                    player.playedthisround = False
                             current_player = (current_player + 1) % len(players_playing)
                         elif move[0] == 'fold':
                             players_playing.pop(current_player)
                             current_player = current_player % len(players_playing)
+
 
                     # re-evaluate first to act before starting next round
                     current_player = self._first_to_act(players_playing)
@@ -180,14 +173,9 @@ class Table(object):
 
                 # resolve the game and move the button
                 self.resolve_game(players_playing)
-                self._move_button()
+                self.reset()
 
-    def _move_button(self):
-        self._button = self._button + 1 % len(self._seats)
-        while self._seats[self._button].emptyplayer:
-            self._button = self._button + 1 % len(self._seats)
-
-    # make this more pythonic
+    # refactor to not use/give indices
     def _first_to_act(self, players_playing):
         # special rule: if heads-up play the button plays first pre-flop
         if self._round == 0 and len(players_playing) == 2:
@@ -216,16 +204,16 @@ class Table(object):
 
             # compute hand ranks
             for player in players_playing:
-                player.handrank = evalHand(player.pocket_cards + self._community)
+                player.handrank = self._evaluator.evaluate(player.hand, self.community)
 
             # trim side_pots to only include the non-empty side pots
             temp_pots = [pot for pot in self._side_pots if pot>0]
 
             # compute who wins each side pot and pay winners
-            for pot_idx in range(len(self._side_pots)):
+            for pot_idx in range(len([pot for pot in self._side_pots if pot>0])):
                 # find players involved given side_pot, compute the winner(s)
                 pot_contributors = [player for player in players_playing if player.lastsidepot >= pot_idx]
-                max_rank = max([player.handrank for player in pot_contributors])
+                max_rank = min([player.handrank for player in pot_contributors])
                 max_idx = [i for i, j in enumerate([player.handrank for player in pot_contributors]) if j == max_rank]
 
                 # pay the winner(s) of side_pot[pot_idx]
@@ -233,7 +221,7 @@ class Table(object):
                     print("winner(s) of sidepot ", pot_idx, " are players ", [player.playerID for player in pot_contributors if player.handrank == max_rank], " they win/split a total of ", self._side_pots[pot_idx])
 
                     pot_contributors[i].refund(int(self._side_pots[pot_idx]/len(max_idx)))
-                    self._side_pots[pot_idx] -= int(self._pot/len(max_idx))
+                    self._side_pots[pot_idx] -= int(self._side_pots[pot_idx]/len(max_idx))
 
                 # any remaining chips after splitting go to the winner in the earliest position
                 earliest = self._first_to_act([player for player in pot_contributors if player.handrank == max_rank])
@@ -241,13 +229,8 @@ class Table(object):
 
     def deal(self):
         for player in self._seats:
-            if not player.emptyplayer:
-                if player.playing_hand:
-                    player.addtohand(self._get_card())
-        for player in self._seats:
-            if not player.emptyplayer:
-                if player.playing_hand:
-                    player.addtohand(self._get_card())
+            if player.playing_hand:
+                player.hand = self._deck.draw(2)
 
     def new_round(self):
         for player in self._player_dict.values():
@@ -255,25 +238,19 @@ class Table(object):
             player.playedthisround = False
         self._round += 1
         self._tocall = 0
+        self._lastraise = 0
 
     def flop(self):
-        self._discard.append(self._get_card()) #burn
-        for _ in range(3):
-            self._community.append(self._get_card())
+        self._discard.append(self._deck.draw(1)) #burn
+        self.community = self._deck.draw(3)
 
     def turn(self):
-        self._discard.append(self._get_card()) #burn
-        self._community.append(self._get_card())
+        self._discard.append(self._deck.draw(1)) #burn
+        self.community.append(self._deck.draw(1))
 
     def river(self):
-        self._discard.append(self._get_card()) #burn
-        self._community.append(self._get_card())
-
-    def _get_card(self):
-        n = random.randint(0,len(self._deck)-1)
-        card = self._deck[n]
-        del self._deck[n]
-        return card
+        self._discard.append(self._deck.draw(1)) #burn
+        self.community.append(self._deck.draw(1))
 
     def add_player(self, host, port, playerID, name, stack, seat = 'any'):
         if (playerID not in self._player_dict):
@@ -304,14 +281,24 @@ class Table(object):
         for player in self._seats:
             if not player.emptyplayer:
                 player.reset_hand()
-        self._deck = range(range(52))
+        self._deck.shuffle()
         self._button = (self._button + 1) % len(self._seats)
         while not self._seats[self._button].playing_hand:
             self._button = (self._button + 1) % len(self._seats)
 
     def output_state(self, current_player):
-        # print("inside output state")
-        return {'players':[player.player_state() for player in self._seats], 'community':self._community, 'my_seat': current_player.get_seat(), 'pocket_cards':current_player.pocket_cards(), 'pot':self._totalpot, 'button':self._button, 'tocall':(self._tocall-current_player.currentbet), 'stack':current_player.stack, 'bigblind':self._bigblind, 'playerID':current_player.playerID}
+        return {
+        'players':[player.player_state() for player in self._seats],
+        'community':self.community,
+        'my_seat': current_player.get_seat(),
+        'pocket_cards':current_player.hand,
+        'pot':self._totalpot,
+        'button':self._button,
+        'tocall':(self._tocall-current_player.currentbet),
+        'stack':current_player.stack,
+        'bigblind':self._bigblind,
+        'playerID':current_player.playerID,
+        'lastraise':self._lastraise}
 
 class Player(object):
     def __init__(self, host, port, playerID, name, stack, emptyplayer = False):
@@ -320,7 +307,7 @@ class Player(object):
         self.playerID = playerID
         self._name = name
 
-        self._hand = []
+        self.hand = []
         self.stack = stack
         self.currentbet = 0
         self.lastsidepot = 0
@@ -343,20 +330,15 @@ class Player(object):
     def set_seat(self, value):
         self._seat = value
 
-    def addtohand(self, card):
-        self._hand.append(card)
-
     def reset_hand(self):
         self._hand=[]
 
-    def pocket_cards(self):
-        return self._hand
-
     def bet(self, bet_size):
-        temp = min(bet_size, self.stack)
-        self.stack -= temp
-        self.currentbet += temp
         self.playedthisround = True
+        if bet_size == 0:
+            return
+        self.stack -= (bet_size - self.currentbet)
+        self.currentbet = bet_size
         if self.stack == 0:
             self.isallin = True
 

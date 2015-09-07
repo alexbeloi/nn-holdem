@@ -6,6 +6,7 @@ The following things need to be built before the project is complete
 
 * ~~holdem dealer~~
 * ~~pot splitting~~
+* ~~incorporate hand rank evaluator~~ (using package [dueces](https://github.com/worldveil/deuces) converted to python3)
 * neural network
 * coevolutionary learning system
 

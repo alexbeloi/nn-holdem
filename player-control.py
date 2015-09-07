@@ -5,15 +5,8 @@ import time
 import math
 import sys
 import holdem
+from deuces.deuces import Card, Deck, Evaluator
 from xmlrpc.server import SimpleXMLRPCServer
-
-# table_spec['players'][#] is tuple ((int) playerID, (int) stack, (bool) playing, (bool) betting)
-# def my_state(table_spec):
-#     players = table_spec.get('players', None)
-#     pocket_cards = table_spec.get('pocket_cards', None)
-#     pot = table_spec.get('pot', None)
-#     button = table_spec.get('button', None)
-#     tocall = table_spec.get('tocall', None)
 
 class PlayerControl(object):
     def __init__(self, host, port, playerID, name = "Alice", stack=2000, playing=True, ai_flag=False):
@@ -62,9 +55,13 @@ class PlayerControl(object):
             if players.index(player) == table_spec.get('my_seat'):
                 print("(me)", end="")
             print("")
-        print("Community cards: ", [holdem.card_parse(card) for card in table_spec.get('community', None)])
+
+        print("Community cards: ", end="")
+        Card.print_pretty_cards(table_spec.get('community', None))
         print("Pot size: ", table_spec.get('pot', None))
-        print("Pocket cards: ", [holdem.card_parse(card) for card in table_spec.get('pocket_cards', None)])
+
+        print("Pocket cards: ", end="")
+        Card.print_pretty_cards(table_spec.get('pocket_cards', None))
         print("To call: ", table_spec.get('tocall', None))
 
     def update_localstate(self, table_state):
@@ -74,7 +71,8 @@ class PlayerControl(object):
     def player_move(self, table_state):
         self.update_localstate(table_state)
         self.show_table(table_state)
-        tocall = table_state.get('tocall')
+        tocall = table_state.get('tocall', None)
+        minraise = max(table_state.get('bigblind', None), 2*table_state.get('lastraise', None))
         move_tuple = ('test', 0)
 
         # ask this human meatbag what their move is
@@ -84,10 +82,10 @@ class PlayerControl(object):
                 print("2) Check")
                 choice = int(input("Choose your option: "))
                 if choice == 1:
-                    choice2 = int(input("How much would you like to raise to? (min = {}, max = {})".format(tocall,self._stack)))
-                    while choice2 < tocall:
-                        choice2 = int(input("(Invalid input) How much would you like to raise? (min = {}, max = {})".format(max(tocall, table_state.get('bigblind')),self._stack)))
-                    move_tuple = ('raise',min(choice2, self._stack))
+                    choice2 = int(input("How much would you like to raise to? (min = {}, max = {})".format(minraise,self._stack)))
+                    while choice2 < minraise:
+                        choice2 = int(input("(Invalid input) How much would you like to raise? (min = {}, max = {})".format(minraise,self._stack)))
+                    move_tuple = ('raise',choice2)
                     self._stack -= choice2
                 if choice == 2:
                   move_tuple = ('check', 0)
@@ -97,10 +95,10 @@ class PlayerControl(object):
                 print("3) Fold")
                 choice = int(input("Choose your option: "))
                 if choice == 1:
-                    choice2 = int(input("How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack)))
-                    while choice2 < tocall:
-                        choice2 = int(input("(Invalid input) How much would you like to raise? (min = {}, max = {})".format(tocall,self._stack)))
-                    move_tuple = ('raise',min(choice2, self._stack))
+                    choice2 = int(input("How much would you like to raise to? (min = {}, max = {})".format(minraise,self._stack)))
+                    while choice2 < minraise:
+                        choice2 = int(input("(Invalid input) How much would you like to raise to? (min = {}, max = {})".format(minraise,self._stack)))
+                    move_tuple = ('raise',choice2)
                     self._stack -= choice2
                 elif choice == 2:
                     move_tuple = ('call', tocall)
@@ -147,16 +145,6 @@ if __name__ == '__main__':
     server = SimpleXMLRPCServer(("localhost", 8001+args.id), logRequests=False, allow_none=True)
     server.register_instance(player_proxy, allow_dotted_names=True)
 
-    # for player in players:
-    #     player.start()
-    #
-    # for player in players:
-    #     player.join()
-
-
-    # server = SimpleXMLRPCServer(("0.0.0.0", 8000), Handler)
-
-    # server.register_introspection_functions()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
