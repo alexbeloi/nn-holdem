@@ -7,7 +7,7 @@ import sys
 import holdem
 from xmlrpc.server import SimpleXMLRPCServer
 
-# table_spec['players'][#] is tuple ((int) threadID, (int) stack, (bool) playing, (bool) betting)
+# table_spec['players'][#] is tuple ((int) playerID, (int) stack, (bool) playing, (bool) betting)
 # def my_state(table_spec):
 #     players = table_spec.get('players', None)
 #     pocket_cards = table_spec.get('pocket_cards', None)
@@ -16,7 +16,7 @@ from xmlrpc.server import SimpleXMLRPCServer
 #     tocall = table_spec.get('tocall', None)
 
 class PlayerControl(object):
-    def __init__(self, host, port, threadID, name, stack=2000, playing=True, ai_flag=False):
+    def __init__(self, host, port, playerID, name = "Alice", stack=2000, playing=True, ai_flag=False):
         # super(PlayerControl, self).__init__()
         self._server = xmlrpc.client.ServerProxy('http://localhost:8000')
         self.daemon = True
@@ -25,7 +25,7 @@ class PlayerControl(object):
         self._name = name
         self._host = host
         self._port = port
-        self._threadID = threadID
+        self._playerID = playerID
         self._stack =  stack
         self._hand = []
 
@@ -34,12 +34,12 @@ class PlayerControl(object):
         self._run_thread.start()
 
     def run(self):
-        print("Player ", self._threadID, " Joining game")
-        self._server.add_player(self._threadID, self._name, self._stack, self._host, self._port)
-        table_state = self._server.get_table_state(self._threadID)
+        print("Player ", self._playerID, " Joining game")
+        self._server.add_player(self._host, self._port, self._playerID, self._name, self._stack)
+        table_state = self._server.get_table_state(self._playerID)
         # print(table_state)
         while True:
-            table_state_new = self._server.get_table_state(self._threadID)
+            table_state_new = self._server.get_table_state(self._playerID)
             # print(table_state)
             if table_state_new != table_state:
                 table_state = table_state_new
@@ -51,15 +51,16 @@ class PlayerControl(object):
                 continue
 
     def show_table(self, table_spec):
-        # print player stacks and inf (playing/betting)
-        # players = [player for player in table_spec.get('players', None) if player != None]
         print("Stacks:")
-        for player in table_spec.get('players', None):
+        players = table_spec.get('players', None)
+        for player in players:
             print(player[0], ": ", player[1], end="")
             if player[2] == True:
                 print("(P)", end="")
             if player[3] == True:
                 print("(B)", end="")
+            if players.index(player) == table_spec.get('my_seat'):
+                print("(me)", end="")
             print("")
         print("Community cards: ", [holdem.card_parse(card) for card in table_spec.get('community', None)])
         print("Pot size: ", table_spec.get('pot', None))
@@ -76,6 +77,7 @@ class PlayerControl(object):
         tocall = table_state.get('tocall')
         move_tuple = ('test', 0)
 
+        # ask this human meatbag what their move is
         if not self._ai_flag:
             if tocall == 0:
                 print("1) Raise")
@@ -106,6 +108,7 @@ class PlayerControl(object):
                 elif choice == 3:
                    move_tuple = ('fold', -1)
 
+        # feed table state to ai and get a response
         else:
             bet_size = nnholdem(table_state)
             if bet_size < tocall:
@@ -135,10 +138,10 @@ class PlayerProxy(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("id", type=int, default="2")
-    parser.add_argument("ai", type=bool, default=True)
+    # parser.add_argument("ai", type=bool, default=True)
     args = parser.parse_args()
 
-    player = PlayerControl("localhost", 8001+args.id, args.id, args.ai)
+    player = PlayerControl("localhost", 8001+args.id, args.id)
     player_proxy = PlayerProxy(player)
 
     server = SimpleXMLRPCServer(("localhost", 8001+args.id), logRequests=False, allow_none=True)

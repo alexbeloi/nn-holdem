@@ -5,7 +5,7 @@ Code to build and teach a neural network to play a game of texas hold'em
 The following things need to be built before the project is complete
 
 * ~~holdem dealer~~
-* pot splitting
+* ~~pot splitting~~
 * neural network
 * coevolutionary learning system
 
@@ -13,7 +13,6 @@ Additional (optional)
 
 * learning from existing real world game history
 * competition heuristics
-*
 
 ### Holdem Implementation
 
