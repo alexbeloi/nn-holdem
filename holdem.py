@@ -168,6 +168,7 @@ class Table(object):
     def post_bigblind(self, player):
         self.player_bet(player, self._bigblind)
         player.playedthisround = False
+        self._lastraise = self._bigblind
 
     def _first_to_act(self, players):
         if self._round == 0 and len(players) == 2:
