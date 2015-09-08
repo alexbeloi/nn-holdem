@@ -10,7 +10,6 @@ from xmlrpc.server import SimpleXMLRPCServer
 
 class PlayerControl(object):
     def __init__(self, host, port, playerID, name = "Alice", stack=2000, playing=True, ai_flag=False):
-        # super(PlayerControl, self).__init__()
         self._server = xmlrpc.client.ServerProxy('http://localhost:8000')
         self.daemon = True
 
@@ -36,14 +35,14 @@ class PlayerControl(object):
             # print(table_state)
             if table_state_new != table_state:
                 table_state = table_state_new
-                # self.show_table(table_state)
+                # self.print_table(table_state)
             time.sleep(10)
             if not table_state:
                 print("not in hand... waiting")
                 time.sleep(10)
                 continue
 
-    def show_table(self, table_spec):
+    def print_table(self, table_spec):
         print("Stacks:")
         players = table_spec.get('players', None)
         for player in players:
@@ -70,7 +69,7 @@ class PlayerControl(object):
 
     def player_move(self, table_state):
         self.update_localstate(table_state)
-        self.show_table(table_state)
+        self.print_table(table_state)
         tocall = table_state.get('tocall', None)
         minraise = max(table_state.get('bigblind', None), 2*table_state.get('lastraise', None))
         move_tuple = ('test', 0)
@@ -132,6 +131,9 @@ class PlayerProxy(object):
 
     def player_move(self, output_spec):
         return self._player.player_move(output_spec)
+
+    def print_table(self, table_state):
+        self._player.print_table(table_state)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

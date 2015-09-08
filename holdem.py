@@ -24,15 +24,16 @@ class Table(object):
         self._deck = Deck()
         self._evaluator = Evaluator()
 
+        self.community = []
         self._round = 0
         self._button = 0
         self._discard = []
-        self.community = []
         self._side_pots = [0]*(seats-1)
         self._totalpot = 0
         self._current_pot = 0
         self._tocall = 0
         self._lastraise = 0
+        self._last_move = None
 
         self._seats = [Player(-1,-1,0,"empty",0,True) for _ in range(seats)]
         self._player_dict = {}
@@ -46,8 +47,6 @@ class Table(object):
         temp_betsize = min(player.stack, bet_size)
         self._totalpot += temp_betsize - player.currentbet
         player.bet(temp_betsize)
-        print("player ", player.playerID ,"currently betting ", player.currentbet)
-        print("bet size: ", temp_betsize)
 
         self._tocall = max(self._tocall, temp_betsize)
         self._lastraise = max(0, temp_betsize  - self._lastraise)
@@ -130,6 +129,7 @@ class Table(object):
 
                         move = player.server.player_move(self.output_state(player))
                         print("Player ", player.playerID, "decides to ",  move)
+                        self._last_move = move
 
                         if move[0] == 'call':
                             self.player_bet(player, self._tocall)
@@ -284,7 +284,8 @@ class Table(object):
         'stack':current_player.stack,
         'bigblind':self._bigblind,
         'playerID':current_player.playerID,
-        'lastraise':self._lastraise}
+        'lastraise':self._lastraise,
+        'lastmove':self._last_move}
 
 class Player(object):
     def __init__(self, host, port, playerID, name, stack, emptyplayer = False):
