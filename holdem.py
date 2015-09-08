@@ -4,8 +4,7 @@ import xmlrpc.client
 import sys
 import time
 import random
-from past import autotranslate
-# autotranslate(['Card','Deck','Evaluator'])
+
 from deuces.deuces import Card, Deck, Evaluator
 from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler
@@ -51,7 +50,7 @@ class Table(object):
         print("bet size: ", temp_betsize)
 
         self._tocall = max(self._tocall, temp_betsize)
-        self._lastraise = max(self._bigblind, temp_betsize  - self._tocall)
+        self._lastraise = max(0, temp_betsize  - self._lastraise)
 
     def resolve_sidepots(self, players_playing):
         if players_playing == []:
@@ -87,29 +86,23 @@ class Table(object):
             else:
                 time.sleep(1)
 
-    # refactor to not use indices
     def start_game(self):
         with self._lock:
-            players_playing = [player for player in self._seats if player.playing_hand]
-            print("players_playing:", [player.playerID for player in players_playing])
+            players = [player for player in self._seats if player.playing_hand]
 
             self.new_round()
             self._round=0
 
-            while len(players_playing)>1:
-                current_player = self._first_to_act(players_playing)
+            while len(players)>1:
+                player = self._first_to_act(players)
 
-                # small blind
-                self.player_bet(players_playing[current_player], self._smallblind)
-                players_playing[current_player].playedthisround = False
-                current_player = (current_player + 1) % len(players_playing)
-
-                # big blind
-                self.player_bet(players_playing[current_player], self._bigblind)
-                players_playing[current_player].playedthisround = False
-                current_player = (current_player + 1) % len(players_playing)
+                self.post_smallblind(player)
+                player = self._next(players, player)
+                self.post_bigblind(player)
+                player = self._next(players, player)
 
                 self._tocall = self._bigblind
+
                 # rounds
                 self._round = 0
                 while self._round<4:
@@ -130,80 +123,72 @@ class Table(object):
                         print("River")
                         self.river()
 
-
-                    while not players_playing[current_player].playedthisround:
-                        # if current players is all in, skip their turn and go to the next player
-                        if players_playing[current_player].isallin:
-                            current_player = (current_player + 1) % len(players_playing)
+                    while not player.playedthisround:
+                        if player.isallin:
+                            player = self._next(players, player)
                             continue
 
-                        # send player board state and ask for their response
-                        state = self.output_state(players_playing[current_player])
-                        move = players_playing[current_player].server.player_move(state)
-
-                        print("Player ", players_playing[current_player].playerID, "decides to ",  move)
+                        move = player.server.player_move(self.output_state(player))
+                        print("Player ", player.playerID, "decides to ",  move)
 
                         if move[0] == 'call':
-                            self.player_bet(players_playing[current_player], self._tocall)
-                            current_player = (current_player + 1) % len(players_playing)
+                            self.player_bet(player, self._tocall)
+                            player = self._next(players, player)
                         elif move[0] == 'check':
-                            self.player_bet(players_playing[current_player], players_playing[current_player].currentbet)
-                            current_player = (current_player + 1) % len(players_playing)
-                        #if raise occurered, everybody else must respond
+                            self.player_bet(player, player.currentbet)
+                            player = self._next(players, player)
                         elif move[0] == 'raise':
-                            self.player_bet(players_playing[current_player], move[1])
-                            for player in players_playing:
-                                if player != players_playing[current_player]:
-                                    player.playedthisround = False
-                            current_player = (current_player + 1) % len(players_playing)
+                            self.player_bet(player, move[1])
+                            for p in players:
+                                if p != player:
+                                    p.playedthisround = False
+                            player = self._next(players, player)
                         elif move[0] == 'fold':
-                            players_playing.pop(current_player)
-                            current_player = current_player % len(players_playing)
+                            folded_player = player
+                            player = self._next(players, player)
+                            players.pop(folded_player)
+                            # break if a single player left
+                            if len(players) ==1:
+                                break
 
-
-                    # re-evaluate first to act before starting next round
-                    current_player = self._first_to_act(players_playing)
-
-                    #break if a single player left
-                    if len(players_playing)==1:
+                    if len(players) ==1:
                         break
 
-                    self.resolve_sidepots(players_playing)
+                    player = self._first_to_act(players)
+                    self.resolve_sidepots(players)
                     self.new_round()
 
-                # resolve the game and move the button
-                self.resolve_game(players_playing)
+                self.resolve_game(players)
                 self.reset()
 
-    # refactor to not use/give indices
-    def _first_to_act(self, players_playing):
-        # special rule: if heads-up play the button plays first pre-flop
-        if self._round == 0 and len(players_playing) == 2:
-            return players_playing.index(self._seats[self._button])
+    def post_smallblind(self, player):
+        self.player_bet(player, self._smallblind)
+        player.playedthisround = False
 
-        # otherwise the first person to the left of the button acts
+    def post_bigblind(self, player):
+        self.player_bet(player, self._bigblind)
+        player.playedthisround = False
+
+    def _first_to_act(self, players):
+        if self._round == 0 and len(players) == 2:
+            return self._seats[self._button]
         try:
-            first = [player.get_seat() for player in players_playing if (player.get_seat() > self._button)][0]
+            first = [player for player in players if player.get_seat() > self._button][0]
         except IndexError:
-            first = [player.get_seat() for player in players_playing][0]
-        return players_playing.index(self._seats[first])
+            first = players[0]
+        return first
 
-    def resolve_game(self, players_playing):
-        if len(players_playing)==1:
-            print("player ", players_playing[0].playerID, " wins the pot (", self._totalpot, ")")
-            players_playing[0].refund(self._totalpot)
+    def _next(self, players, current_player):
+        return players[(players.index(current_player)+1) % len(players)]
+
+    def resolve_game(self, players):
+        if len(players)==1:
+            print("player ", players[0].playerID, " wins the pot (", self._totalpot, ")")
+            players[0].refund(self._totalpot)
             self._totalpot = 0
         else:
-            # remaining rounds should already be played out, these 6 lines should be ok to remove
-            if self._round==0:
-                self.flop()
-            if self._round==1:
-                self.turn()
-            if self._round==2:
-                self.river()
-
             # compute hand ranks
-            for player in players_playing:
+            for player in players:
                 player.handrank = self._evaluator.evaluate(player.hand, self.community)
 
             # trim side_pots to only include the non-empty side pots
@@ -212,7 +197,7 @@ class Table(object):
             # compute who wins each side pot and pay winners
             for pot_idx in range(len([pot for pot in self._side_pots if pot>0])):
                 # find players involved given side_pot, compute the winner(s)
-                pot_contributors = [player for player in players_playing if player.lastsidepot >= pot_idx]
+                pot_contributors = [player for player in players if player.lastsidepot >= pot_idx]
                 max_rank = min([player.handrank for player in pot_contributors])
                 max_idx = [i for i, j in enumerate([player.handrank for player in pot_contributors]) if j == max_rank]
 
@@ -225,7 +210,7 @@ class Table(object):
 
                 # any remaining chips after splitting go to the winner in the earliest position
                 earliest = self._first_to_act([player for player in pot_contributors if player.handrank == max_rank])
-                [player for player in pot_contributors if player.handrank == max_rank][earliest].refund(self._side_pots[pot_idx])
+                earliest.refund(self._side_pots[pot_idx])
 
     def deal(self):
         for player in self._seats:
