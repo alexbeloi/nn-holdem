@@ -1,0 +1,4 @@
+[submodule "deuces"]
+	path = deuces
+	url = https://github.com/alexbeloi/deuces.git
+	branch = convert2to3
