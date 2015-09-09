@@ -49,20 +49,24 @@ class Table(object):
         self._run_thread.start()
 
     def player_bet(self, player, bet_size):
-        temp_betsize = min(player.stack, bet_size)
-        self._totalpot += temp_betsize - player.currentbet
-        player.bet(temp_betsize)
+        temp_betsize = min(player.stack, bet_size - player.currentbet)
+        self._totalpot += temp_betsize
+        player.bet(temp_betsize + player.currentbet)
 
         self._tocall = max(self._tocall, temp_betsize)
         self._lastraise = max(self._lastraise, temp_betsize  - self._lastraise)
 
-    def resolve_sidepots(self, players_playing):
+    def resolve_sidepots(self, players_playing, allinflag = False):
         players = [p for p in players_playing if p.currentbet != 0]
-        print('current bets: ', [p.currentbet for p in players])
-        if players == []:
+        # print('current bets: ', [(p.playerID,p.currentbet) for p in players])
+        if not players and not allinflag:
             self._current_pot -= 1
             return
+        elif not players:
+            return
         smallest_bet = min([p.currentbet for p in players])
+        smallest_players = [p for p,bet in zip(players, [p.currentbet for p in players]) if bet == smallest_bet and p.isallin]
+        # print('sp',[p.playerID for p in smallest_players])
         self._side_pots[self._current_pot] += smallest_bet*len(players)
         for p in players:
             p.currentbet -= smallest_bet
@@ -71,11 +75,15 @@ class Table(object):
         if len(players) == 1:
             players[0].refund(players[0].currentbet)
             return
-        else:
+        elif smallest_players:
             self._current_pot += 1
-            self.resolve_sidepots([p for p in players if p.currentbet >0])
+            self.resolve_sidepots([p for p in players if p not in smallest_players], bool(smallest_players))
+        else:
+            for p in players:
+                self._side_pots[self._current_pot] += p.currentbet
+            return
         # self._totalpot = sum(self._side_pots)
-        print('current sidepots: ', self._side_pots)
+        # print('current sidepots: ', self._side_pots)
 
     def run(self):
         while True:
@@ -90,10 +98,18 @@ class Table(object):
             # quickstart when 2 players have joined the table
             # print(len(players))
             if len(players) == 8:
+                if len([p for p in players if p.playing_hand]) == 1:
+                    winner = [p for p in players if p.playing_hand][0]
+                    print('player', winner.playerID, 'won the game')
+                    winner.server.save_network()
+                    break
                 # answer = input("Would you like to start?")
                 # if not answer:
                 self.start_game()
+                print('starting game number: ', self._number_of_games)
                 self._number_of_games += 1
+                if self._number_of_games % 1000 == 0:
+                    sorted(self._seats, key=lambda x:x.stack)[-1].server.save_network()
                 if (self._number_of_games % 15) == 0 and self._number_of_games < 60:
                     self._smallblind = BLIND_INCREMENTS[int(self._number_of_games/15)][0]
                     self._bigblind = BLIND_INCREMENTS[int(self._number_of_games/15)][1]
@@ -124,19 +140,19 @@ class Table(object):
             while self._round<4 and len(players)>1:
                 if self._round == 0:
                     # deal phase
-                    print("Dealing")
+                    # print("Dealing")
                     self.deal()
                 elif self._round == 1:
                     # floph phase
-                    print("Flop")
+                    # print("Flop")
                     self.flop()
                 elif self._round == 2:
                     # turn phase
-                    print("Turn")
+                    # print("Turn")
                     self.turn()
                 elif self._round ==3:
                     # river phase
-                    print("River")
+                    # print("River")
                     self.river()
 
                 done_players = []
@@ -145,7 +161,7 @@ class Table(object):
                         player = self._next(players, player)
                         continue
                     move = player.server.player_move(self.output_state(player))
-                    print("Player ", player.playerID, "decides to ",  move)
+                    # print("Player ", player.playerID, "decides to ",  move)
                     self._last_move = move
 
 
@@ -169,10 +185,8 @@ class Table(object):
                         # break if a single player left
                         if len(players) ==1:
                             break
-                    if player.isallin:
-                        done_players.append(player)
 
-                print('potsize:', self._totalpot)
+                # print('potsize:', self._totalpot)
                 if len(players) ==1:
                     break
 
@@ -194,7 +208,8 @@ class Table(object):
 
     def _first_to_act(self, players):
         if self._round == 0 and len(players) == 2:
-            return self._seats[self._button]
+            return self._next(sorted(players + [self._seats[self._button]], key=lambda x:x.get_seat()), self._seats[self._button])
+            # return self._seats[self._button]
         try:
             first = [player for player in players if player.get_seat() > self._button][0]
         except IndexError:
@@ -202,7 +217,8 @@ class Table(object):
         return first
 
     def _next(self, players, current_player):
-        return players[(players.index(current_player)+1) % len(players)]
+        idx = players.index(current_player)
+        return players[(idx+1) % len(players)]
 
     def resolve_game(self, players):
         if len(players)==1:
@@ -226,7 +242,7 @@ class Table(object):
 
                 # pay the winner(s) of side_pot[pot_idx]
                 for i in max_idx:
-                    print("winner(s) of sidepot ", pot_idx, " are players ", [player.playerID for player in pot_contributors if player.handrank == max_rank], " they win/split a total of ", self._side_pots[pot_idx])
+                    print("Winner of sidepot ", pot_idx, " are players ", [player.playerID for player in pot_contributors if player.handrank == max_rank], " they win a total of ", self._side_pots[pot_idx])
 
                     pot_contributors[i].refund(int(self._side_pots[pot_idx]/len(max_idx)))
                     self._side_pots[pot_idx] -= int(self._side_pots[pot_idx]/len(max_idx))
@@ -308,7 +324,8 @@ class Table(object):
         'stack':current_player.stack,
         'bigblind':self._bigblind,
         'playerID':current_player.playerID,
-        'lastraise':self._lastraise}
+        'lastraise':self._lastraise,
+        'minraise':max(self._bigblind, self._lastraise + self._tocall)}
 
 class Player(object):
     def __init__(self, host, port, playerID, name, stack, emptyplayer = False):
