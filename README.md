@@ -1,42 +1,114 @@
 # nn-holdem
-Code to build and teach a neural network to play a game of texas hold'em
+Code to build and teach a neural network to play a game of texas hold'em. This is a learning project as much as anything, so the plan is to build most things myself.
+
+As of this writing, it has all of the features it needs to run a proper single table game against a randomly generated set of (unlearned) ai opponents.
 
 ### Current Status
 The following things need to be built before the project is complete
 
-* ~~holdem dealer~~
+* ~~hold'em dealer~~
 * ~~pot splitting~~
 * ~~incorporate hand rank evaluator~~ (using forked package [dueces](https://github.com/alexbeloi/deuces/tree/convert2to3) converted to python3)
 * ~~neural network~~
-* coevolutionary learning system
+* learning system
 
 Additional (optional)
 
 * learning from existing real world game history
 * competition heuristics
 
+### Usage
+Running from play.py is simplest for now (although the ai opponents are just random for now)
+```python
+$ cat play.py
+from holdem import Table, TableProxy, PlayerControl, PlayerControlProxy
+
+seats = 8
+# start an table with 8 seats
+t = Table(seats)
+tp = TableProxy(t)
+
+# controller for human meat bag
+h = PlayerControl("localhost", 8001, 1, False)
+hp = PlayerControlProxy(h)
+
+print('starting ai players')
+# fill the rest of the table with ai players
+for i in range(2,seats+1):
+    p = PlayerControl("localhost", 8000+i, i, True)
+    pp = PlayerControlProxy(p)
+```
+
+To start an 8 person table with yourself + (seven) ai opponents simply run
+```python
+$ python3 play.py
+Player  1  Joining game
+starting ai players
+Player  2  Joining game
+Player  3  Joining game
+Player  4  Joining game
+Player  5  Joining game
+Player  6  Joining game
+Player  7  Joining game
+Player  8  Joining game
+Press [enter] to start a game:
+Player 4 ['raise', 100]
+Player 5 ['call', 100]
+Player 6 ['call', 100]
+Player 7 ['call', 100]
+Player 8 ['call', 100]
+Stacks:
+0 :  2000(P)(me)
+1 :  1990(P)
+2 :  1975(P)
+3 :  1900(P)
+4 :  1900(P)
+5 :  1900(P)
+6 :  1900(P)
+7 :  1900(P)
+Community cards:  
+Pot size:  535
+Pocket cards:   [ 3 ♠ ] , [ 7 ♦ ]
+To call:  100
+1) Raise
+2) Call
+3) Fold
+Choose your option:
+
+```
+
+Currently designed to save the weight matrix (.npy) of the neural network if an ai opponent wins.
+
 ### Holdem Implementation
 
-We built a basic single table no limit holdem game. Both dealer and player run a SimpleXMLRPCServer to exchange game data about board state and player moves.
+We built a basic single table no limit hold'em game. Both dealer and player run a SimpleXMLRPCServer to network board state and player moves.
 
 The current implementation is meant to simulate a cash game. In the future, we will expand to accomodate multi-table tournament play.
 
 ## Neural network
 
-The following is to be implemented
+The neural network uses mixed binary and continuous data.
+
+Based on the recommendation of some literature on modeling systems with mixed data, we use *effect coding* **{-1,1}** instead of *dummy coding* **{0,1}** for the binary variables. For the continuous variables, we normalize by the size of the bigblind and center all values around the mean stack size (this is an experiment for now, *Note: bigblind input can be removed in this case*).
+
+The activation function we're currently using **tanh**, but since we aren't going to use backpropogation we may want to consider nondifferentiable activation functions.
 
 ### Input data
 
-|                 | Description |
+| Continuous      | Description |
 | :---------------| :-----------|
 | Pot             | Chips available to win in current hand of play |
-| ToCall          | Amout of chips needed to add to pot in order stay in current hand of play |
-| Players         | Number of opponents |
-| Stacks          | The amount of chips(money) each player has |
+| To Call         | Amout of chips needed to add to pot in order stay in current hand of play |
+| Last Raise      | The most recent raise ammount for current round |
+| Player Stacks   | Ammount of chips(money) each player has |
+| BigBlind        | Size of minimum stake |
+
+| Binary          | Description |
+| :- | :- |
+| Player position | The ai's position at the table |
 | Pocket cards    | Cards in personal hand |
 | Community cards | Shared cards available for all players to use |
-| BigBlind        | Size of minimum stake |
-| Button          | Position of player last to act in a given round |
+| Button          | Position of player last to act in a round, determines the order of betting |
 
 ### Layers
 
