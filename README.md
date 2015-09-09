@@ -7,7 +7,7 @@ The following things need to be built before the project is complete
 * ~~holdem dealer~~
 * ~~pot splitting~~
 * ~~incorporate hand rank evaluator~~ (using forked package [dueces](https://github.com/alexbeloi/deuces/tree/convert2to3) converted to python3)
-* neural network
+* ~~neural network~~
 * coevolutionary learning system
 
 Additional (optional)
