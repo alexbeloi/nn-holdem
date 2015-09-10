@@ -40,8 +40,8 @@ class Table(object):
                 answer = input("Press [enter] to start a game:")
                 if not answer:
                     self.start_game()
-                print('starting game number: ', self._number_of_games)
                 self._number_of_games += 1
+                print('starting game number: ', self._number_of_games)
 
                 # increment blinds every 15 hands (based on avg hands/hour of 30)
                 if (self._number_of_games % 15) == 0 and self._number_of_games < 60:
@@ -243,6 +243,7 @@ class Table(object):
     def resolve_game(self, players):
         if len(players)==1:
             players[0].refund(self._totalpot)
+            print("Player", players[0].get_seat(), "wins the pot (",self._totalpot,")")
             self._totalpot = 0
         else:
             # compute hand ranks
@@ -261,6 +262,7 @@ class Table(object):
 
                 for player in winning_players:
                     split_amount = int(self._side_pots[pot_idx]/len(winning_players))
+                    print("Player", player.get_seat(), "wins side pot (",int(self._side_pots[pot_idx]/len(winning_players)),")")
                     player.refund(split_amount)
                     self._side_pots[pot_idx] -= split_amount
 
@@ -273,6 +275,7 @@ class Table(object):
         for player in self._seats:
             if not player.emptyplayer:
                 player.reset_hand()
+        self.community = []
         self._current_sidepot = 0
         self._totalpot = 0
         self._side_pots = [0]*len(self._seats)

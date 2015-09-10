@@ -35,7 +35,9 @@ class PlayerControl(object):
             if player[2] == True:
                 print("(P)", end="")
             if player[3] == True:
-                print("(B)", end="")
+                print("(Bet)", end="")
+            if player[0] == table_state.get('button'):
+                print("(Button)", end="")
             if players.index(player) == table_state.get('my_seat'):
                 print("(me)", end="")
             print("")
