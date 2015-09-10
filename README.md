@@ -104,7 +104,7 @@ The activation function we're currently using **tanh**, but since we aren't goin
 | BigBlind        | Size of minimum stake |
 
 | Binary          | Description |
-| :- | :- |
+| :---------------| :-----------|
 | Player position | The ai's position at the table |
 | Pocket cards    | Cards in personal hand |
 | Community cards | Shared cards available for all players to use |
