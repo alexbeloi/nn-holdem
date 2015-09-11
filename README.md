@@ -18,7 +18,7 @@ Additional (optional)
 * competition heuristics
 
 ### Usage
-Running from play.py is simplest for now (although the ai opponents are just random for now)
+Running from play.py is simplest way to test things out (although the ai opponents are just random for now)
 ```python
 $ cat play.py
 from holdem import Table, TableProxy, PlayerControl, PlayerControlProxy
@@ -39,7 +39,7 @@ for i in range(2,seats+1):
     pp = PlayerControlProxy(p)
 ```
 
-To start an 8 person table with yourself + (seven) ai opponents simply run
+To start an 8 person table with yourself + (seven) unlearned ai opponents simply run
 ```python
 $ python3 play.py
 Player  1  Joining game
@@ -51,33 +51,31 @@ Player  5  Joining game
 Player  6  Joining game
 Player  7  Joining game
 Player  8  Joining game
-Press [enter] to start a game:
-Player 4 ['raise', 100]
-Player 5 ['call', 100]
-Player 6 ['call', 100]
-Player 7 ['call', 100]
-Player 8 ['call', 100]
+Player 4 ['raise', 1475]
+Player 5 ['fold', -1]
+Player 6 ['fold', -1]
+Player 7 ['fold', -1]
+Player 8 ['fold', -1]
 Stacks:
-0 :  2000(P)(me)
-1 :  1990(P)
-2 :  1975(P)
-3 :  1900(P)
-4 :  1900(P)
-5 :  1900(P)
-6 :  1900(P)
-7 :  1900(P)
+1 :  2000(P)(Button)(me)
+2 :  1990(P)
+3 :  1975(P)
+4 :  525(P)
+5 :  2000
+6 :  2000
+7 :  2000
+8 :  2000
 Community cards:  
-Pot size:  535
-Pocket cards:   [ 3 ♠ ] , [ 7 ♦ ]
-To call:  100
+Pot size:  1510
+Pocket cards:   [ 3 ♠ ] , [ 3 ♣ ]  
+To call:  1475
 1) Raise
 2) Call
 3) Fold
 Choose your option:
-
 ```
 
-Currently designed to save the weight matrix (.npy) of the neural network if an ai opponent wins.
+Currently designed to save the weight matrix (.npy) of the neural network if an ai opponent is the last left standing.
 
 ### Holdem Implementation
 
