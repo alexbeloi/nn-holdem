@@ -37,8 +37,7 @@ class Player(object):
         self.isallin = False
         self.currentbet = 0
         self.lastsidepot = 0
-        if self.stack == 0:
-            self.playing_hand = False
+        self.playing_hand = (self.stack != 0)
 
     def bet(self, bet_size):
         self.playedthisround = True
@@ -53,4 +52,4 @@ class Player(object):
         self.stack += ammount
 
     def player_state(self):
-        return (self.get_seat(), self.stack, self.playing_hand, self.betting)
+        return (self.get_seat(), self.stack, self.playing_hand, self.betting, self.playerID)

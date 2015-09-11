@@ -1,11 +1,12 @@
-from threading import Thread, Lock
 import time
-from .player import Player
+from threading import Thread, Lock
 from xmlrpc.server import SimpleXMLRPCServer
+
 from deuces.deuces import Card, Deck, Evaluator
+from .player import Player
 
 class Table(object):
-    BLIND_INCREMENTS = [[10,25],[25,50],[50,100],[100,200]]
+    BLIND_INCREMENTS = [[10,25],[25,50],[50,100],[75,150],[100,200],[150,300],[200,400],[300,600],[400,800],[500,10000],[600,1200],[800,1600],[1000,2000]]
 
     def __init__(self, seats = 8):
         self._blind_index = 0
@@ -26,6 +27,7 @@ class Table(object):
 
         # fill seats with dummy players
         self._seats = [Player(-1,-1,0,"empty",0,True) for _ in range(seats)]
+        self.emptyseats = seats
         self._player_dict = {}
 
         self._lock = Lock()
@@ -37,28 +39,40 @@ class Table(object):
         while True:
             players = [player for player in self._seats if not player.emptyplayer]
             if len(players) == len(self._seats):
-                answer = input("Press [enter] to start a game:")
-                if not answer:
+                self._number_of_games = 1
+                [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[0]
+                while(len([player for player in self._seats if not player.emptyplayer])>1):
+                    # answer = input("Press [enter] to start a game:")
+                    # if not answer:
                     self.start_game()
-                self._number_of_games += 1
-                print('starting game number: ', self._number_of_games)
+                    self._number_of_games += 1
+                    print('Starting game number: ', self._number_of_games)
+                    for p in self._seats:
+                        if p.playing_hand:
+                            print("Player ",p.playerID, " stack size: ", p.stack)
+                    # increment blinds every 15 hands (based on avg hands/hour of 30)
+                    if (self._number_of_games % 15) == 0 and self._number_of_games < 60:
+                        self.increment_blinds()
 
-                # increment blinds every 15 hands (based on avg hands/hour of 30)
-                if (self._number_of_games % 15) == 0 and self._number_of_games < 60:
-                    self.increment_blinds()
+                    if len([p for p in players if p.playing_hand]) == 1:
+                        winner = [p for p in players if p.playing_hand][0]
+                        print('player', winner.playerID, 'won the game')
+                        winner.server.save_ai_state()
+                        winner.server.quit()
+                        break
 
-                if len([p for p in players if p.playing_hand]) == 1:
-                    winner = [p for p in players if p.playing_hand][0]
-                    print('player', winner.playerID, 'won the game')
-                    winner.server.save_ai_state()
-                    break
+                    if self._number_of_games == 500:
+                        print("no winner somehow")
+                        for p in players:
+                            p.server.quit()
             else:
                 time.sleep(1)
 
     def start_game(self):
         with self._lock:
             players = [player for player in self._seats if player.playing_hand]
-            if sum([p.stack for p in players]) != 2000*len([p for p in self._seats if not p.emptyplayer]):
+            if sum([p.stack for p in players]) != 2000*len(self._seats):
+                # print("sum:", sum([p.stack for p in players]))
                 raise ValueError('stacks are not adding up')
             self.new_round()
             self._round=0
@@ -92,41 +106,46 @@ class Table(object):
                     # print("River")
                     self.river()
 
-                done_players = []
-                while not player.playedthisround:
+                folded_players = []
+                while not player.playedthisround and len([p for p in players if not p.isallin]) >=1:
                     if player.isallin:
+                        # print("player ", player.playerID, "is all in, skipping their turn")
                         player = self._next(players, player)
                         continue
+                    # print("requesting move from ",player.playerID)
                     move = player.server.player_move(self.output_state(player))
 
                     if move[0] == 'call':
                         self.player_bet(player, self._tocall)
-                        print("Player", player.playerID, move)
+                        # print("Player", player.playerID, move)
                         player = self._next(players, player)
                     elif move[0] == 'check':
                         self.player_bet(player, player.currentbet)
-                        print("Player", player.playerID, move)
+                        # print("Player", player.playerID, move)
                         player = self._next(players, player)
                     elif move[0] == 'raise':
                         self.player_bet(player, move[1])
-                        print("Player", player.playerID, move)
+                        # print("Player", player.playerID, move)
                         for p in players:
                             if p != player:
+                                # print('asking player', p.playerID, 'to answer to raise')
                                 p.playedthisround = False
                         player = self._next(players, player)
                     elif move[0] == 'fold':
+                        player.playing_hand = False
                         folded_player = player
-                        print("Player", player.playerID, move[0])
+                        # print("Player", player.playerID, move[0])
                         player = self._next(players, player)
+                        # print("Next player (", player.playerID, ") played this round?", player.playedthisround)
                         players.remove(folded_player)
-                        done_players.append(folded_player)
+                        folded_players.append(folded_player)
                         # break if a single player left
                         if len(players) ==1:
                             break
 
 
                 player = self._first_to_act(players)
-                self.resolve_sidepots(players + done_players)
+                self.resolve_sidepots(players + folded_players)
                 self.new_round()
 
             self.resolve_game(players)
@@ -137,10 +156,12 @@ class Table(object):
         [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[self._blind_index]
 
     def post_smallblind(self, player):
+        # print("player ", player.playerID, "small blind", self._smallblind)
         self.player_bet(player, self._smallblind)
         player.playedthisround = False
 
     def post_bigblind(self, player):
+        # print("player ", player.playerID, "big blind", self._bigblind)
         self.player_bet(player, self._bigblind)
         player.playedthisround = False
         self._lastraise = self._bigblind
@@ -152,7 +173,7 @@ class Table(object):
         player.bet(relative_bet + player.currentbet)
 
         self._totalpot += relative_bet
-        self._tocall = max(self._tocall, relative_bet)
+        self._tocall = max(self._tocall, total_bet)
         self._lastraise = max(self._lastraise, relative_bet  - self._lastraise)
 
     def _first_to_act(self, players):
@@ -195,42 +216,36 @@ class Table(object):
                     new_player.set_seat(i)
                     break
             self._player_dict[playerID] = new_player
+            self.emptyseats += 1
 
     def remove_player(self, playerID):
         try:
             if playerID in self._player_dict:
-                self._seats.remove(self._player_dict[playerID])
+                idx = self._seats.index(self._player_dict[playerID])
+                self._seats[idx] = Player(-1,-1,0,"empty",0,True)
                 del self._player_dict[playerID]
+                self.emptyseats -= 1
         except ValueError:
             pass
 
-    def resolve_sidepots(self, players_playing, allinflag = False):
-        players = [p for p in players_playing if p.currentbet != 0]
-
-        # catch recursion
-        if not players and not allinflag:
-            self._current_sidepot -= 1
-            return
-        elif not players:
+    def resolve_sidepots(self, players_playing):
+        players = [p for p in players_playing if p.currentbet]
+        # print("current bets: ", [p.currentbet for p in players])
+        if not players:
             return
 
-        smallest_bet = min([p.currentbet for p in players])
+        smallest_bet = min([p.currentbet for p in players if p.playing_hand])
         smallest_players_allin = [p for p,bet in zip(players, [p.currentbet for p in players]) if bet == smallest_bet and p.isallin]
 
-        self._side_pots[self._current_sidepot] += smallest_bet*len(players)
         for p in players:
-            p.currentbet -= smallest_bet
-            if not p.currentbet:
-                p.lastsidepot = self._current_sidepot
-        if len(players) == 1:
-            players[0].refund(players[0].currentbet)
-            return
-        elif smallest_players_allin:
+            self._side_pots[self._current_sidepot] += min(smallest_bet, p.currentbet)
+            p.currentbet -= min(smallest_bet, p.currentbet)
+            p.lastsidepot = self._current_sidepot
+
+        if smallest_players_allin:
             self._current_sidepot += 1
-            self.resolve_sidepots([p for p in players if p not in smallest_players_allin], bool(smallest_players_allin))
-        else:
-            for p in players:
-                self._side_pots[self._current_sidepot] += p.currentbet
+            self.resolve_sidepots(players)
+        # print("sidepots: ", self._side_pots)
 
     def new_round(self):
         for player in self._player_dict.values():
@@ -241,9 +256,11 @@ class Table(object):
         self._lastraise = 0
 
     def resolve_game(self, players):
+        # print("Community cards: ", end="")
+        # Card.print_pretty_cards(self.community)
         if len(players)==1:
-            players[0].refund(self._totalpot)
-            print("Player", players[0].get_seat(), "wins the pot (",self._totalpot,")")
+            players[0].refund(sum(self._side_pots))
+            # print("Player", players[0].playerID, "wins the pot (",sum(self._side_pots),")")
             self._totalpot = 0
         else:
             # compute hand ranks
@@ -255,6 +272,8 @@ class Table(object):
 
             # compute who wins each side pot and pay winners
             for pot_idx,_ in enumerate(temp_pots):
+                # print("players last pots", [(p.playerID, p.lastsidepot) for p in players])
+
                 # find players involved in given side_pot, compute the winner(s)
                 pot_contributors = [p for p in players if p.lastsidepot >= pot_idx]
                 winning_rank = min([p.handrank for p in pot_contributors])
@@ -262,7 +281,7 @@ class Table(object):
 
                 for player in winning_players:
                     split_amount = int(self._side_pots[pot_idx]/len(winning_players))
-                    print("Player", player.get_seat(), "wins side pot (",int(self._side_pots[pot_idx]/len(winning_players)),")")
+                    # print("Player", player.playerID, "wins side pot (",int(self._side_pots[pot_idx]/len(winning_players)),")")
                     player.refund(split_amount)
                     self._side_pots[pot_idx] -= split_amount
 
@@ -275,11 +294,14 @@ class Table(object):
         for player in self._seats:
             if not player.emptyplayer:
                 player.reset_hand()
+                if not player.stack:
+                    player.server.quit()
         self.community = []
         self._current_sidepot = 0
         self._totalpot = 0
         self._side_pots = [0]*len(self._seats)
         self._deck.shuffle()
+
         self._button = (self._button + 1) % len(self._seats)
         while not self._seats[self._button].playing_hand:
             self._button = (self._button + 1) % len(self._seats)
@@ -301,7 +323,7 @@ class Table(object):
 class TableProxy(object):
     def __init__(self, table):
         self._table = table
-        self.server = SimpleXMLRPCServer(("localhost", 8000), logRequests=False, allow_none=True)
+        self.server = SimpleXMLRPCServer(('0.0.0.0', 8000), logRequests=False, allow_none=True)
         self.server.register_instance(self, allow_dotted_names=True)
         Thread(target=self.server.serve_forever).start()
 
@@ -310,3 +332,6 @@ class TableProxy(object):
 
     def add_player(self, host, port, playerID, name, stack):
         self._table.add_player(host, port, playerID, name, stack)
+
+    def remove_player(self, playerID):
+        self._table.remove_player(playerID)

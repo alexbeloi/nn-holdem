@@ -1,5 +1,5 @@
-from .nn import NeuralNetwork
 import numpy as np
+from .nn import NeuralNetwork
 
 class HoldemAI(NeuralNetwork):
     def __init__(self, ID):
@@ -11,7 +11,7 @@ class HoldemAI(NeuralNetwork):
         parsed = self.input_parser(table_state)
         activated = self.activate(parsed)[-1][0]
         descaled = self.descale(activated)
-        return descaled
+        return descaled*table_state.get('bigblind')
 
     # parses table_state from TableProxy into clean (mostly binary) data for neural network
     def input_parser(self, table_state):
@@ -43,7 +43,8 @@ class HoldemAI(NeuralNetwork):
         bigblind = 1
 
         self.chip_mean = sum([p[1] for p in players])/len(players)
-        self.chip_stdev = np.std([p[1] for p in players])
+        self.chip_stdev = np.std([p[1] for p in players])+0.01 #so we don't divide by zero
+        # print('std: ', self.chip_stdev)
 
         for p in players:
             p[0] = HoldemAI.bin_to_binlist(bin(p[0])[2:].zfill(3))
@@ -67,14 +68,14 @@ class HoldemAI(NeuralNetwork):
         return output
 
     def rescale(self, num):
-        return int(num-self.chip_mean)
+        # return int(num-self.chip_mean)
         # return int((num-mean)/(stdev+0.001))
-        # return int((num-mean)/(stdev*np.sqrt(2*np.pi)))
+        return int((num-self.chip_mean)/(self.chip_stdev*25*np.sqrt(2*np.pi)))
 
     def descale(self, num):
-        return int(num+self.chip_mean)
+        # return int(num+self.chip_mean)
         # return int(num*(stdev)+mean)
-        # return int(num*(stdev*np.sqrt(2*np.pi))+mean)
+        return int(num*(self.chip_stdev*25*np.sqrt(2*np.pi))+self.chip_mean)
 
     # takes card from deuces Card class (reprsented by int) and gives its 29 digit binary representation in a list, first 3 bits are unused
     @staticmethod
