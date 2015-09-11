@@ -1,7 +1,7 @@
 # nn-holdem
-Code to build and teach a neural network to play a game of texas hold'em. This is a learning project as much as anything, so the plan is to build most things myself.
+Code to build and teach a neural network to play a game of texas hold'em. The code includes a bare-bones hold'em table that even human players can play on via console.
 
-As of this writing, it has all of the features it needs to run a proper single table game against a randomly generated set of (unlearned) ai opponents.
+As of this writing, it has all of the features it needs to run a proper single table game against a set of ai opponents.
 
 ### Current Status
 The following things need to be built before the project is complete
@@ -89,9 +89,9 @@ The current implementation is meant to simulate a cash game. In the future, we w
 
 The neural network uses mixed binary and continuous data.
 
-Based on the recommendation of some literature on modeling systems with mixed data, we use *effect coding* **{-1,1}** instead of *dummy coding* **{0,1}** for the binary variables. For the continuous variables, we normalize by the size of the bigblind and center all values around the mean stack size (this is an experiment for now, *Note: bigblind input can be removed in this case*).
+Based on the recommendation of some literature on modeling systems with mixed data, we use *effect coding* **{-1,1}** instead of *dummy coding* **{0,1}** for the binary variables. For the continuous variables, we normalize by the bigblind and center all values. Ideally we would center values around their means, for the stack sizes we can use the mean stack size at any given table but for other continuous inputs are more tricky (currently trying to center around mean stack size anyway).
 
-The activation function we're currently using **tanh**, but since we aren't going to use backpropogation we may want to consider nondifferentiable activation functions.
+The activation function we're currently using is **tanh**, but since we aren't going to use backpropogation we may want to consider nondifferentiable activation functions.
 
 ### Input data
 
@@ -105,7 +105,7 @@ The activation function we're currently using **tanh**, but since we aren't goin
 
 | Binary          | Description |
 | :---------------| :-----------|
-| Player position | The ai's position at the table |
+| Player position | Own position at the table |
 | Pocket cards    | Cards in personal hand |
 | Community cards | Shared cards available for all players to use |
 | Button          | Position of player last to act in a round, determines the order of betting |
