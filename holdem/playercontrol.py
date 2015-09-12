@@ -78,9 +78,10 @@ class PlayerControl(object):
                     while choice2 < minraise:
                         choice2 = int(input("(Invalid input) How much would you like to raise? (min = {}, max = {})".format(minraise,self._stack)))
                     move_tuple = ('raise',choice2)
-                if choice == 2:
+                elif choice == 2:
                   move_tuple = ('check', 0)
                 else:
+                    print('doing something stupid')
                     move_tuple = ('check', 0)
             else:
                 print("1) Raise")

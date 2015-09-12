@@ -8,7 +8,7 @@ from .player import Player
 class Table(object):
     BLIND_INCREMENTS = [[10,25],[25,50],[50,100],[75,150],[100,200],[150,300],[200,400],[300,600],[400,800],[500,10000],[600,1200],[800,1600],[1000,2000]]
 
-    def __init__(self, seats = 8):
+    def __init__(self, seats = 8, quiet = False):
         self._blind_index = 0
         [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[0]
         self._deck = Deck()
@@ -30,6 +30,7 @@ class Table(object):
         self.emptyseats = seats
         self._player_dict = {}
 
+        self._quiet = quiet
         self._lock = Lock()
         self._run_thread = Thread(target = self.run, args=())
         self._run_thread.daemon = True
@@ -65,6 +66,7 @@ class Table(object):
                         print("no winner somehow")
                         for p in players:
                             p.server.quit()
+                        break
             else:
                 time.sleep(1)
 
@@ -117,26 +119,28 @@ class Table(object):
 
                     if move[0] == 'call':
                         self.player_bet(player, self._tocall)
-                        # print("Player", player.playerID, move)
+                        if not self._quiet:
+                            print("Player", player.playerID, move)
                         player = self._next(players, player)
                     elif move[0] == 'check':
                         self.player_bet(player, player.currentbet)
-                        # print("Player", player.playerID, move)
+                        if not self._quiet:
+                            print("Player", player.playerID, move)
                         player = self._next(players, player)
                     elif move[0] == 'raise':
                         self.player_bet(player, move[1])
-                        # print("Player", player.playerID, move)
+                        if not self._quiet:
+                            print("Player", player.playerID, move)
                         for p in players:
                             if p != player:
-                                # print('asking player', p.playerID, 'to answer to raise')
                                 p.playedthisround = False
                         player = self._next(players, player)
                     elif move[0] == 'fold':
                         player.playing_hand = False
                         folded_player = player
-                        # print("Player", player.playerID, move[0])
+                        if not self._quiet:
+                            print("Player", player.playerID, move)
                         player = self._next(players, player)
-                        # print("Next player (", player.playerID, ") played this round?", player.playedthisround)
                         players.remove(folded_player)
                         folded_players.append(folded_player)
                         # break if a single player left
