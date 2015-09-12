@@ -25,5 +25,5 @@ while True:
             pp = PlayerControlProxy(p)
 
         time.sleep(1)
-        j += 1
+        j += 1 %16
     time.sleep(1)
