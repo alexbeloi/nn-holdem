@@ -12,6 +12,7 @@ class HoldemAI(NeuralNetwork):
         activated = self.activate(parsed)[-1][0]
         descaled = self.descale(activated)
         return descaled*table_state.get('bigblind')
+        # return descaled
 
     # parses table_state from TableProxy into clean (mostly binary) data for neural network
     def input_parser(self, table_state):

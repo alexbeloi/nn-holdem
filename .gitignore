@@ -2,3 +2,5 @@
 *.pyo
 *.sh
 *.npy
+*.swp
+*.csv
