@@ -42,21 +42,24 @@ class Table(object):
         #     self.writer = csv.writer(f)
 
     def run(self):
+        prev_winner = None
         while True:
-            players = [player for player in self._seats if not player.emptyplayer]
             self.ready_players()
+            # for p in self._seats:
+            #     print('Player ',p.playerID, ' playing hand: ', p.playing_hand, 'sitting out', p.sitting_out)
+
+            players = [player for player in self._seats if not player.emptyplayer and not player.sitting_out]
+            self._number_of_games = 1
             consec_wins = 0
-            prev_winner = None
             # start game if table full
             if len(players) == len(self._seats):
-                self._number_of_games = 1
                 [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[0]
 
                 # keep playing until there's a single player
                 while(self.emptyseats < len(self._seats)-1):
                     # answer = input('Press [enter] to start a game:')
                     # if not answer:
-                    self.start_game()
+                    self.start_game(players)
                     self._number_of_games += 1
 
                     # print('Starting game number: ', self._number_of_games)
@@ -79,10 +82,11 @@ class Table(object):
                             winner.server.rejoin()
                         else:
                             if prev_winner not in [None, 1,2,3]:
-                                with open('ai_log.csv', 'ab') as f:
-                                    f.write([bytes(prev_winner, 'UTF-8'), consec_wins])
+                                with open('ai_log2.csv', 'ab') as f:
+                                    f.write(bytes(prev_winner + ',' + str(consec_wins) +'\n', 'UTF-8'))
                             consec_wins = 1
                             winner.server.save_ai_state(consec_wins)
+                            winner.server.rejoin()
                             prev_winner = win_uuid
                         break
 
@@ -90,15 +94,15 @@ class Table(object):
                         print('no winner somehow')
                         for p in players:
                             if p.playing_hand:
-                                p.server.quit()
+                                p.server.rejoin_new()
                         break
             else:
                 time.sleep(1)
 
-    def start_game(self):
-        players = [player for player in self._seats if player.playing_hand]
+    def start_game(self, players):
+        players = [p for p in players if p.playing_hand]
         # if sum([p.stack for p in players]) != 2000*len(self._seats):
-        #     # print('sum:', sum([p.stack for p in players]))
+        #     print('sum:', sum([p.stack for p in players]))
         #     raise ValueError('stacks are not adding up')
         self.new_round()
         self._round=0
@@ -247,9 +251,11 @@ class Table(object):
             self.emptyseats -= 1
 
     def ready_players(self):
-        for p in self._seats:
-            if not p.emptyplayer:
-                p.playing_hand = True
+        if len([p for p in self._seats if not p.emptyplayer and p.sitting_out]) == len(self._seats):
+            for p in self._seats:
+                if not p.emptyplayer:
+                    p.sitting_out = False
+                    p.playing_hand = True
 
     def remove_player(self, playerID):
         try:
@@ -325,7 +331,7 @@ class Table(object):
 
     def reset(self):
         for player in self._seats:
-            if not player.emptyplayer:
+            if not player.emptyplayer and not player.sitting_out:
                 player.reset_hand()
                 # join new player when they lose by default
                 if not player.stack:

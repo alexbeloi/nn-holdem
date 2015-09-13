@@ -39,7 +39,7 @@ class PlayerControl(object):
 
     def save_ai_state(self, consec_wins):
         if self._ai_flag and self._ai_type == 0:
-            print('AI type NEURAL NETWORK won', consec_wins+1, 'game(s)')
+            print('AI type NEURAL NETWORK won', consec_wins, 'game(s)')
             # self.writer.write([self.ai.networkID, consec_wins])
             self.ai.save()
         else:
@@ -124,7 +124,6 @@ class PlayerControl(object):
                 elif choice == 2:
                   move_tuple = ('check', 0)
                 else:
-                    print('doing something stupid')
                     move_tuple = ('check', 0)
             else:
                 print('1) Raise')
@@ -157,6 +156,7 @@ class PlayerControl(object):
                 # neural network output
                 bet_size = self.ai.act(table_state)
                 bet_size += table_state.get('bigblind') - (bet_size % table_state.get('bigblind'))
+                # print('ai bet_size', bet_size)
             elif self._ai_type == 1:
                 # check/fold bot
                 bet_size = 0
@@ -210,8 +210,8 @@ class PlayerControlProxy(object):
     def print_table(self, table_state):
         self._player.print_table(table_state)
 
-    def rejoin_new(self, ai_type = 0):
-        self._player.rejoin_new()
+    def rejoin_new(self, ai_type = 'unchanged'):
+        self._player.rejoin_new(ai_type)
 
     def rejoin(self, ai_type = 0):
         self._player.rejoin()

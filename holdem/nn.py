@@ -1,12 +1,12 @@
 import numpy as np
 
 class NeuralNetwork(object):
-    SAVE_DIR = './hof'
+    SAVE_DIR = '/home/alex/Documents/Dropbox/code/nn-holdem/hof2/'
     def __init__(self, input_size, dim, networkID):
         self.networkID = networkID
         self.dim = [input_size]+list(dim)
         try:
-            self.weight_matrix = np.load(str(networkID)+'.npy')
+            self.weight_matrix = np.load('/home/alex/Documents/Dropbox/code/nn-holdem/hof/' +str(networkID)+'.npy')
         except:
             self.weight_matrix = []
             weight_layer = np.random.rand(self.dim[1],self.dim[0])

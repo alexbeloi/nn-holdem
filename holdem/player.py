@@ -20,8 +20,9 @@ class Player(object):
         self.isallin = False
         self.playing_hand = False
         self.playedthisround = False
+        self.sitting_out = True
 
-        self._address = "http://%s:%s" % (host, port)
+        self._address = 'http://%s:%s' % (host, port)
         self.server = xmlrpc.client.ServerProxy(self._address)
 
     def get_seat(self):
