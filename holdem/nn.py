@@ -1,6 +1,7 @@
 import numpy as np
 
 class NeuralNetwork(object):
+    SAVE_DIR = './hof'
     def __init__(self, input_size, dim, networkID):
         self.networkID = networkID
         self.dim = [input_size]+list(dim)
@@ -27,7 +28,7 @@ class NeuralNetwork(object):
         return activations
 
     def save(self):
-        np.save(str(self.networkID)+'.npy', self.weight_matrix)
+        np.save(NeuralNetwork.SAVE_DIR + str(self.networkID)+'.npy', self.weight_matrix)
 
     def print_weights(self):
         for w in self.weight_matrix:

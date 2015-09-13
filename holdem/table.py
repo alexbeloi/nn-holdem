@@ -1,4 +1,6 @@
 import time
+import csv
+import uuid
 from threading import Thread, Lock
 from xmlrpc.server import SimpleXMLRPCServer
 
@@ -26,146 +28,168 @@ class Table(object):
         self._number_of_games = 0
 
         # fill seats with dummy players
-        self._seats = [Player(-1,-1,0,"empty",0,True) for _ in range(seats)]
+        self._seats = [Player(-1,-1,0,'empty',0,True) for _ in range(seats)]
         self.emptyseats = seats
         self._player_dict = {}
+        self._join_queue = []
 
         self._quiet = quiet
-        self._lock = Lock()
         self._run_thread = Thread(target = self.run, args=())
         self._run_thread.daemon = True
         self._run_thread.start()
 
+        # with open('ai_log.csv', 'ab') as f:
+        #     self.writer = csv.writer(f)
+
     def run(self):
         while True:
             players = [player for player in self._seats if not player.emptyplayer]
+            self.ready_players()
+            consec_wins = 0
+            prev_winner = None
+            # start game if table full
             if len(players) == len(self._seats):
                 self._number_of_games = 1
                 [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[0]
-                while(len([player for player in self._seats if not player.emptyplayer])>1):
-                    # answer = input("Press [enter] to start a game:")
+
+                # keep playing until there's a single player
+                while(self.emptyseats < len(self._seats)-1):
+                    # answer = input('Press [enter] to start a game:')
                     # if not answer:
                     self.start_game()
                     self._number_of_games += 1
-                    print('Starting game number: ', self._number_of_games)
-                    for p in self._seats:
-                        if p.playing_hand:
-                            print("Player ",p.playerID, " stack size: ", p.stack)
+
+                    # print('Starting game number: ', self._number_of_games)
+                    # for p in self._seats:
+                    #     if p.playing_hand:
+                    #         print('Player ',p.playerID, ' stack size: ', p.stack)
+
                     # increment blinds every 15 hands (based on avg hands/hour of 30)
                     if (self._number_of_games % 15) == 0 and self._number_of_games < 60:
                         self.increment_blinds()
 
                     if len([p for p in players if p.playing_hand]) == 1:
                         winner = [p for p in players if p.playing_hand][0]
-                        print('player', winner.playerID, 'won the game')
-                        winner.server.save_ai_state()
-                        winner.server.quit()
+                        win_uuid = winner.server.get_ai_id()
+                        # print('player', winner.playerID, 'won the game')
+                        # print("winner id", winner.server.get_ai_id())
+                        if win_uuid == prev_winner:
+                            consec_wins += 1
+                            winner.server.save_ai_state(consec_wins)
+                            winner.server.rejoin()
+                        else:
+                            if prev_winner not in [None, 1,2,3]:
+                                with open('ai_log.csv', 'ab') as f:
+                                    f.write([bytes(prev_winner, 'UTF-8'), consec_wins])
+                            consec_wins = 1
+                            winner.server.save_ai_state(consec_wins)
+                            prev_winner = win_uuid
                         break
 
                     if self._number_of_games == 500:
-                        print("no winner somehow")
+                        print('no winner somehow')
                         for p in players:
-                            p.server.quit()
+                            if p.playing_hand:
+                                p.server.quit()
                         break
             else:
                 time.sleep(1)
 
     def start_game(self):
-        with self._lock:
-            players = [player for player in self._seats if player.playing_hand]
-            if sum([p.stack for p in players]) != 2000*len(self._seats):
-                # print("sum:", sum([p.stack for p in players]))
-                raise ValueError('stacks are not adding up')
-            self.new_round()
-            self._round=0
+        players = [player for player in self._seats if player.playing_hand]
+        # if sum([p.stack for p in players]) != 2000*len(self._seats):
+        #     # print('sum:', sum([p.stack for p in players]))
+        #     raise ValueError('stacks are not adding up')
+        self.new_round()
+        self._round=0
+
+        player = self._first_to_act(players)
+
+        self.post_smallblind(player)
+        player = self._next(players, player)
+        self.post_bigblind(player)
+        player = self._next(players, player)
+
+        self._tocall = self._bigblind
+
+        # rounds
+        self._round = 0
+        while self._round<4 and len(players)>1:
+            if self._round == 0:
+                # deal phase
+                # print('Dealing')
+                self.deal()
+            elif self._round == 1:
+                # floph phase
+                # print('Flop')
+                self.flop()
+            elif self._round == 2:
+                # turn phase
+                # print('Turn')
+                self.turn()
+            elif self._round ==3:
+                # river phase
+                # print('River')
+                self.river()
+
+            folded_players = []
+            while not player.playedthisround and len([p for p in players if not p.isallin]) >=1:
+                if player.isallin:
+                    # print('player ', player.playerID, 'is all in, skipping their turn')
+                    player = self._next(players, player)
+                    continue
+                # print('requesting move from ',player.playerID)
+                move = player.server.player_move(self.output_state(player))
+
+                if move[0] == 'call':
+                    self.player_bet(player, self._tocall)
+                    if not self._quiet:
+                        print('Player', player.playerID, move)
+                    player = self._next(players, player)
+                elif move[0] == 'check':
+                    self.player_bet(player, player.currentbet)
+                    if not self._quiet:
+                        print('Player', player.playerID, move)
+                    player = self._next(players, player)
+                elif move[0] == 'raise':
+                    self.player_bet(player, move[1])
+                    if not self._quiet:
+                        print('Player', player.playerID, move)
+                    for p in players:
+                        if p != player:
+                            p.playedthisround = False
+                    player = self._next(players, player)
+                elif move[0] == 'fold':
+                    player.playing_hand = False
+                    folded_player = player
+                    if not self._quiet:
+                        print('Player', player.playerID, move)
+                    player = self._next(players, player)
+                    players.remove(folded_player)
+                    folded_players.append(folded_player)
+                    # break if a single player left
+                    if len(players) ==1:
+                        break
+
 
             player = self._first_to_act(players)
+            self.resolve_sidepots(players + folded_players)
+            self.new_round()
 
-            self.post_smallblind(player)
-            player = self._next(players, player)
-            self.post_bigblind(player)
-            player = self._next(players, player)
-
-            self._tocall = self._bigblind
-
-            # rounds
-            self._round = 0
-            while self._round<4 and len(players)>1:
-                if self._round == 0:
-                    # deal phase
-                    # print("Dealing")
-                    self.deal()
-                elif self._round == 1:
-                    # floph phase
-                    # print("Flop")
-                    self.flop()
-                elif self._round == 2:
-                    # turn phase
-                    # print("Turn")
-                    self.turn()
-                elif self._round ==3:
-                    # river phase
-                    # print("River")
-                    self.river()
-
-                folded_players = []
-                while not player.playedthisround and len([p for p in players if not p.isallin]) >=1:
-                    if player.isallin:
-                        # print("player ", player.playerID, "is all in, skipping their turn")
-                        player = self._next(players, player)
-                        continue
-                    # print("requesting move from ",player.playerID)
-                    move = player.server.player_move(self.output_state(player))
-
-                    if move[0] == 'call':
-                        self.player_bet(player, self._tocall)
-                        if not self._quiet:
-                            print("Player", player.playerID, move)
-                        player = self._next(players, player)
-                    elif move[0] == 'check':
-                        self.player_bet(player, player.currentbet)
-                        if not self._quiet:
-                            print("Player", player.playerID, move)
-                        player = self._next(players, player)
-                    elif move[0] == 'raise':
-                        self.player_bet(player, move[1])
-                        if not self._quiet:
-                            print("Player", player.playerID, move)
-                        for p in players:
-                            if p != player:
-                                p.playedthisround = False
-                        player = self._next(players, player)
-                    elif move[0] == 'fold':
-                        player.playing_hand = False
-                        folded_player = player
-                        if not self._quiet:
-                            print("Player", player.playerID, move)
-                        player = self._next(players, player)
-                        players.remove(folded_player)
-                        folded_players.append(folded_player)
-                        # break if a single player left
-                        if len(players) ==1:
-                            break
-
-
-                player = self._first_to_act(players)
-                self.resolve_sidepots(players + folded_players)
-                self.new_round()
-
-            self.resolve_game(players)
-            self.reset()
+        self.resolve_game(players)
+        self.reset()
 
     def increment_blinds(self):
         self._blind_index = min(self._blind_index+1,3)
         [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[self._blind_index]
 
     def post_smallblind(self, player):
-        # print("player ", player.playerID, "small blind", self._smallblind)
+        # print('player ', player.playerID, 'small blind', self._smallblind)
         self.player_bet(player, self._smallblind)
         player.playedthisround = False
 
     def post_bigblind(self, player):
-        # print("player ", player.playerID, "big blind", self._bigblind)
+        # print('player ', player.playerID, 'big blind', self._bigblind)
         self.player_bet(player, self._bigblind)
         player.playedthisround = False
         self._lastraise = self._bigblind
@@ -213,28 +237,33 @@ class Table(object):
     def add_player(self, host, port, playerID, name, stack):
         if playerID not in self._player_dict:
             new_player = Player(host, port, playerID, name, stack)
-            new_player.playing_hand = True # default to have new players start playing
+            # new_player.playing_hand = True # default to have new players start playing
             for i,player in enumerate(self._seats):
                 if player.emptyplayer:
                     self._seats[i] = new_player
                     new_player.set_seat(i)
                     break
             self._player_dict[playerID] = new_player
-            self.emptyseats += 1
+            self.emptyseats -= 1
+
+    def ready_players(self):
+        for p in self._seats:
+            if not p.emptyplayer:
+                p.playing_hand = True
 
     def remove_player(self, playerID):
         try:
             if playerID in self._player_dict:
                 idx = self._seats.index(self._player_dict[playerID])
-                self._seats[idx] = Player(-1,-1,0,"empty",0,True)
+                self._seats[idx] = Player(-1,-1,0,'empty',0,True)
                 del self._player_dict[playerID]
-                self.emptyseats -= 1
+                self.emptyseats += 1
         except ValueError:
             pass
 
     def resolve_sidepots(self, players_playing):
         players = [p for p in players_playing if p.currentbet]
-        # print("current bets: ", [p.currentbet for p in players])
+        # print('current bets: ', [p.currentbet for p in players])
         if not players:
             return
 
@@ -249,7 +278,7 @@ class Table(object):
         if smallest_players_allin:
             self._current_sidepot += 1
             self.resolve_sidepots(players)
-        # print("sidepots: ", self._side_pots)
+        # print('sidepots: ', self._side_pots)
 
     def new_round(self):
         for player in self._player_dict.values():
@@ -260,11 +289,11 @@ class Table(object):
         self._lastraise = 0
 
     def resolve_game(self, players):
-        # print("Community cards: ", end="")
+        # print('Community cards: ', end='')
         # Card.print_pretty_cards(self.community)
         if len(players)==1:
             players[0].refund(sum(self._side_pots))
-            # print("Player", players[0].playerID, "wins the pot (",sum(self._side_pots),")")
+            # print('Player', players[0].playerID, 'wins the pot (',sum(self._side_pots),')')
             self._totalpot = 0
         else:
             # compute hand ranks
@@ -276,7 +305,7 @@ class Table(object):
 
             # compute who wins each side pot and pay winners
             for pot_idx,_ in enumerate(temp_pots):
-                # print("players last pots", [(p.playerID, p.lastsidepot) for p in players])
+                # print('players last pots', [(p.playerID, p.lastsidepot) for p in players])
 
                 # find players involved in given side_pot, compute the winner(s)
                 pot_contributors = [p for p in players if p.lastsidepot >= pot_idx]
@@ -285,7 +314,7 @@ class Table(object):
 
                 for player in winning_players:
                     split_amount = int(self._side_pots[pot_idx]/len(winning_players))
-                    # print("Player", player.playerID, "wins side pot (",int(self._side_pots[pot_idx]/len(winning_players)),")")
+                    # print('Player', player.playerID, 'wins side pot (',int(self._side_pots[pot_idx]/len(winning_players)),')')
                     player.refund(split_amount)
                     self._side_pots[pot_idx] -= split_amount
 
@@ -298,8 +327,10 @@ class Table(object):
         for player in self._seats:
             if not player.emptyplayer:
                 player.reset_hand()
+                # join new player when they lose by default
                 if not player.stack:
-                    player.server.quit()
+                    # print('player', player.playerID, 'stack', player.stack)
+                    player.server.rejoin_new()
         self.community = []
         self._current_sidepot = 0
         self._totalpot = 0
