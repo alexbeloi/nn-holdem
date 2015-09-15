@@ -12,7 +12,7 @@ from deuces.deuces import Card
 # xmlrpc.client.Marshaller.dispatch[type(0)] = lambda _, v, w: w("<value><i8>%d</i8></value>" % v)
 
 class PlayerControl(object):
-    def __init__(self, host, port, playerID, ai_flag = False, ai_type = 0, name = 'Alice', stack = 2000):
+    def __init__(self, host, port, playerID, ai_flag = False, ai_type = -1, name = 'Alice', stack = 2000):
         self.server = xmlrpc.client.ServerProxy('http://0.0.0.0:8000')
         self.daemon = True
 
@@ -37,18 +37,16 @@ class PlayerControl(object):
         else:
             return self._ai_type
 
-    def save_ai_state(self, consec_wins):
+    def save_ai_state(self):
         if self._ai_flag and self._ai_type == 0:
-            print('AI type NEURAL NETWORK won', consec_wins, 'game(s)')
+            print('AI type NEURAL NETWORK won (', self.get_ai_id(), ')')
             # self.writer.write([self.ai.networkID, consec_wins])
             self.ai.save()
         else:
             print('AI type ', self._ai_type, 'won')
 
-    def new_ai(self, ai_type):
-        self._ai_type = ai_type
-        if ai_type == 0:
-            self.ai = HoldemAI(uuid.uuid4())
+    def new_ai(self, ai_id):
+        self.ai = HoldemAI(ai_id) # defaults to random network if ai_id not recognized
 
     def add_player(self):
         # print('Player', self.playerID, 'joining game')
@@ -62,14 +60,12 @@ class PlayerControl(object):
         self.reset_stack()
         self.add_player()
 
-    def rejoin_new(self, ai_type = 'unchanged'):
-        self.remove_player()
-        self.reset_stack()
-        if ai_type == 'unchanged':
-            self.new_ai(self._ai_type)
-        else:
-            self.new_ai(ai_type)
-        self.add_player()
+    def rejoin_new(self, ai_id):
+        self.new_ai(ai_id)
+        self.rejoin()
+
+    def new_ai_type(self, ai_type):
+        self._ai_type = ai_type
 
     def reset_stack(self):
         self._stack = 2000
@@ -156,7 +152,7 @@ class PlayerControl(object):
                 # neural network output
                 bet_size = self.ai.act(table_state)
                 bet_size += table_state.get('bigblind') - (bet_size % table_state.get('bigblind'))
-                # print('ai bet_size', bet_size)
+                print('ai bet_size', bet_size)
             elif self._ai_type == 1:
                 # check/fold bot
                 bet_size = 0
@@ -195,6 +191,7 @@ class PlayerControl(object):
 class PlayerControlProxy(object):
     def __init__(self,player):
         self._quit = False
+
         self._player = player
         self.server = SimpleXMLRPCServer((self._player.host, self._player.port), logRequests=False, allow_none=True)
         self.server.register_instance(self, allow_dotted_names=True)
@@ -210,6 +207,9 @@ class PlayerControlProxy(object):
     def print_table(self, table_state):
         self._player.print_table(table_state)
 
+    def join(self):
+        self._player.add_player()
+
     def rejoin_new(self, ai_type = 'unchanged'):
         self._player.rejoin_new(ai_type)
 
@@ -219,8 +219,8 @@ class PlayerControlProxy(object):
     def get_ai_id(self):
         return self._player.get_ai_id()
 
-    def save_ai_state(self, consec_wins):
-        self._player.save_ai_state(consec_wins)
+    def save_ai_state(self):
+        self._player.save_ai_state()
 
     def quit(self):
         self._player.server.remove_player(self._player.playerID)

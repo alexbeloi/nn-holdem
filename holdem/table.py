@@ -1,7 +1,7 @@
 import time
-import csv
 import uuid
 from threading import Thread, Lock
+import xmlrpc.client
 from xmlrpc.server import SimpleXMLRPCServer
 
 from deuces.deuces import Card, Deck, Evaluator
@@ -10,7 +10,7 @@ from .player import Player
 class Table(object):
     BLIND_INCREMENTS = [[10,25],[25,50],[50,100],[75,150],[100,200],[150,300],[200,400],[300,600],[400,800],[500,10000],[600,1200],[800,1600],[1000,2000]]
 
-    def __init__(self, seats = 8, quiet = False):
+    def __init__(self, seats = 8, quiet = False, training = False):
         self._blind_index = 0
         [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[0]
         self._deck = Deck()
@@ -20,90 +20,79 @@ class Table(object):
         self._round = 0
         self._button = 0
         self._discard = []
+
         self._side_pots = [0]*seats
-        self._current_sidepot = 0
+        self._current_sidepot = 0 # index of _side_pots
         self._totalpot = 0
+
         self._tocall = 0
         self._lastraise = 0
-        self._number_of_games = 0
+        self._number_of_hands = 0
 
         # fill seats with dummy players
         self._seats = [Player(-1,-1,0,'empty',0,True) for _ in range(seats)]
         self.emptyseats = seats
         self._player_dict = {}
-        self._join_queue = []
+
+        self.teacher = xmlrpc.client.ServerProxy('http://0.0.0.0:8080')
 
         self._quiet = quiet
+        self._training = training
         self._run_thread = Thread(target = self.run, args=())
         self._run_thread.daemon = True
+
+    def start(self):
         self._run_thread.start()
 
-        # with open('ai_log.csv', 'ab') as f:
-        #     self.writer = csv.writer(f)
-
     def run(self):
-        prev_winner = None
         while True:
-            self.ready_players()
-            # for p in self._seats:
-            #     print('Player ',p.playerID, ' playing hand: ', p.playing_hand, 'sitting out', p.sitting_out)
+            self.run_game()
 
-            players = [player for player in self._seats if not player.emptyplayer and not player.sitting_out]
-            self._number_of_games = 1
-            consec_wins = 0
-            # start game if table full
-            if len(players) == len(self._seats):
-                [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[0]
+    def run_game(self):
+        self.ready_players()
+        # for p in self._seats:
+        #     print('Player ',p.playerID, ' playing hand: ', p.playing_hand, 'sitting out', p.sitting_out)
+        players = [player for player in self._seats if not player.emptyplayer and not player.sitting_out]
 
-                # keep playing until there's a single player
-                while(self.emptyseats < len(self._seats)-1):
-                    # answer = input('Press [enter] to start a game:')
-                    # if not answer:
-                    self.start_game(players)
-                    self._number_of_games += 1
+        self._number_of_hands = 1
 
-                    # print('Starting game number: ', self._number_of_games)
-                    # for p in self._seats:
-                    #     if p.playing_hand:
-                    #         print('Player ',p.playerID, ' stack size: ', p.stack)
+        # start hand if table full
+        if len(players) == len(self._seats):
+            [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[0]
 
-                    # increment blinds every 15 hands (based on avg hands/hour of 30)
-                    if (self._number_of_games % 15) == 0 and self._number_of_games < 60:
-                        self.increment_blinds()
+            # keep playing until there's a single player (shotgun style)
+            while(self.emptyseats < len(self._seats)-1):
+                # answer = input('Press [enter] to start a game:')
+                # if not answer:
+                self.start_hand(players)
+                self._number_of_hands += 1
+                if not self._quiet:
+                    print('Starting game number: ', self._number_of_hands)
+                    for p in self._seats:
+                        if p.playing_hand:
+                            print('Player ',p.playerID, ' stack size: ', p.stack)
 
-                    if len([p for p in players if p.playing_hand]) == 1:
-                        winner = [p for p in players if p.playing_hand][0]
-                        win_uuid = winner.server.get_ai_id()
-                        # print('player', winner.playerID, 'won the game')
-                        # print("winner id", winner.server.get_ai_id())
-                        if win_uuid == prev_winner:
-                            consec_wins += 1
-                            winner.server.save_ai_state(consec_wins)
-                            winner.server.rejoin()
-                        else:
-                            if prev_winner not in [None, 1,2,3]:
-                                with open('ai_log2.csv', 'ab') as f:
-                                    f.write(bytes(prev_winner + ',' + str(consec_wins) +'\n', 'UTF-8'))
-                            consec_wins = 1
-                            winner.server.save_ai_state(consec_wins)
-                            winner.server.rejoin()
-                            prev_winner = win_uuid
-                        break
+                # increment blinds every 15 hands (based on avg hands/hour of 30)
+                if (self._number_of_hands % 15) == 0 and self._number_of_hands < 60:
+                    self.increment_blinds()
 
-                    if self._number_of_games == 500:
-                        print('no winner somehow')
-                        for p in players:
-                            if p.playing_hand:
-                                p.server.rejoin_new()
-                        break
-            else:
-                time.sleep(1)
 
-    def start_game(self, players):
+                if len([p for p in players if p.playing_hand]) == 1:
+                    winner = [p for p in players if p.playing_hand][0]
+                    if self._training:
+                        self.teacher.add_winner(winner.server.get_ai_id())
+                    break
+
+                if self._number_of_hands == 500:
+                    print('no winner in 500 hands')
+                    break
+
+    def start_hand(self, players):
         players = [p for p in players if p.playing_hand]
-        # if sum([p.stack for p in players]) != 2000*len(self._seats):
-        #     print('sum:', sum([p.stack for p in players]))
-        #     raise ValueError('stacks are not adding up')
+        # if not self._quiet:
+        #     if sum([p.stack for p in players]) != 2000*len(self._seats):
+        #         print('sum:', sum([p.stack for p in players]))
+        #         raise ValueError('stacks are not adding up')
         self.new_round()
         self._round=0
 
@@ -320,7 +309,8 @@ class Table(object):
 
                 for player in winning_players:
                     split_amount = int(self._side_pots[pot_idx]/len(winning_players))
-                    # print('Player', player.playerID, 'wins side pot (',int(self._side_pots[pot_idx]/len(winning_players)),')')
+                    if not self._quiet:
+                        print('Player', player.playerID, 'wins side pot (',int(self._side_pots[pot_idx]/len(winning_players)),')')
                     player.refund(split_amount)
                     self._side_pots[pot_idx] -= split_amount
 
@@ -376,3 +366,9 @@ class TableProxy(object):
 
     def remove_player(self, playerID):
         self._table.remove_player(playerID)
+
+    def run_game(self):
+        self._table.run_game()
+
+    def run_forever(self):
+        self._table.start()

@@ -14,3 +14,5 @@ print('starting ai players')
 for i in range(2,seats+1):
     p = PlayerControl("localhost", 8000+i, i, True)
     pp = PlayerControlProxy(p)
+
+tp.run_game()

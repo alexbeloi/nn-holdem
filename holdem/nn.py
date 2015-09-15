@@ -1,12 +1,11 @@
 import numpy as np
 
 class NeuralNetwork(object):
-    SAVE_DIR = '/home/alex/Documents/Dropbox/code/nn-holdem/hof2/'
     def __init__(self, input_size, dim, networkID):
         self.networkID = networkID
         self.dim = [input_size]+list(dim)
         try:
-            self.weight_matrix = np.load('/home/alex/Documents/Dropbox/code/nn-holdem/hof/' +str(networkID)+'.npy')
+            self.weight_matrix = np.load(str(networkID)+'.npy')
         except:
             self.weight_matrix = []
             weight_layer = np.random.rand(self.dim[1],self.dim[0])
@@ -28,7 +27,7 @@ class NeuralNetwork(object):
         return activations
 
     def save(self):
-        np.save(NeuralNetwork.SAVE_DIR + str(self.networkID)+'.npy', self.weight_matrix)
+        np.save(str(self.networkID)+'.npy', self.weight_matrix)
 
     def print_weights(self):
         for w in self.weight_matrix:
