@@ -3,16 +3,15 @@ from .nn import NeuralNetwork
 
 class HoldemAI(NeuralNetwork):
     def __init__(self, ID):
-        super().__init__(258, [258,200,1], ID)
+        super().__init__(257, [258,200,1], ID)
         self.chip_mean = 0
         self.chip_stdev = 0
 
     def act(self, table_state):
         parsed = self.input_parser(table_state)
         activated = self.activate(parsed)[-1][0]
-        descaled = self.descale(activated)
-        return descaled*table_state.get('bigblind')
-        # return descaled
+        rescaled = self.rescale_output(activated)
+        return rescaled
 
     # parses table_state from TableProxy into clean (mostly binary) data for neural network
     def input_parser(self, table_state):
@@ -24,6 +23,9 @@ class HoldemAI(NeuralNetwork):
         tocall = table_state.get('tocall', None)
         bigblind = table_state.get('bigblind', None)
         lastraise = table_state.get('lastraise', None)
+
+        # make note of our own stack
+        self.my_stack = players[my_seat][1]
 
         # need to make copy of list so that we don't edit table_state permanently
         players = [[i for i in j] for j in players]
@@ -41,42 +43,55 @@ class HoldemAI(NeuralNetwork):
         pot = pot/bigblind
         tocall = tocall/bigblind
         lastraise = lastraise/bigblind
-        bigblind = 1
 
         self.chip_mean = sum([p[1] for p in players])/len(players)
-        self.chip_stdev = np.std([p[1] for p in players])+0.01 #so we don't divide by zero
-        # print('std: ', self.chip_stdev)
+        self.chip_range = self.chip_mean*len(players)/2
 
         for p in players:
             p[0] = HoldemAI.bin_to_binlist(bin(p[0])[2:].zfill(3))
-            p[1] = [self.rescale(p[1])]
+            p[1] = [(p[1]-self.chip_mean)/self.chip_range]
             p[2] = HoldemAI.bin_to_binlist(bin(p[2])[2:])
             p[3] = HoldemAI.bin_to_binlist(bin(p[3])[2:])
 
-        # centering all chip values around the player chip_mean
-        pot_centered = self.rescale(pot)
-        tocall_centered = self.rescale(tocall)
-        lastraise_centered = self.rescale(lastraise)
-        bigblind_centered = self.rescale(bigblind)
 
-        output_bin = hand_bin + comm_bin + my_seat_bin
-        output_cont = [pot_centered, tocall_centered, lastraise_centered, bigblind_centered]
+        # avg pot size in 8-person cash table No Limit Hold'em is reported to be ~6-10 big blinds
+        # add: compute rolling average
+        pot_centered = (pot-8)/self.chip_range
+
+        # average to call size will be assumed to be 1/3 of average pot (educated guess)
+        # add: compute rolling average
+        tocall_centered = (tocall-8/3)/self.chip_range
+
+        # treated same as tocall
+        lastraise_centered = (lastraise-8/3)/self.chip_range
+
+        # combine binary and continuous data into one vector
+
+        # hand_bin uses 29*2 = 58 inputs
+        # comm_bin uses 29*5 = 145 inputs
+        # my_seat_bin  uses 3 inputs
+        inputs_bin = hand_bin + comm_bin + my_seat_bin
+
+        # pot_centered, tocall_centered, lastraise_centered each use 1 input
+        inputs_cont = [pot_centered, tocall_centered, lastraise_centered]
+
+        # each player addes 1 continuous input, and 3+2 binary inputs
         for p in players:
-            output_bin = output_bin + p[0] + p[2] + p[3]
-            output_cont = output_cont + p[1]
+            inputs_bin = inputs_bin + p[0] + p[2] + p[3]
+            inputs_cont = inputs_cont + p[1]
 
-        output = HoldemAI.center_bin(output_bin) + output_cont
-        return output
+        inputs = HoldemAI.center_bin(inputs_bin) + inputs_cont
+        return inputs
 
-    def rescale(self, num):
-        # return int(num-self.chip_mean)
-        # return int((num-mean)/(stdev+0.001))
-        return int((num-self.chip_mean)/(self.chip_stdev*25*np.sqrt(2*np.pi)))
+    def rescale_output(self,num):
+        # output of neural network is given from -1 to 1, we interpret this as a bet ammount as a percentage of the player's stack
+        return int((num+1)*self.my_stack/2)
 
-    def descale(self, num):
-        # return int(num+self.chip_mean)
-        # return int(num*(stdev)+mean)
-        return int(num*(self.chip_stdev*25*np.sqrt(2*np.pi))+self.chip_mean)
+    # def rescale(self, num):
+    #     return int((num-self.chip_mean)/(self.chip_stdev*25*np.sqrt(2*np.pi)))
+    #
+    # def descale(self, num):
+    #     return int(num*(self.chip_stdev*25*np.sqrt(2*np.pi))+self.chip_mean)
 
     # takes card from deuces Card class (reprsented by int) and gives its 29 digit binary representation in a list, first 3 bits are unused
     @staticmethod

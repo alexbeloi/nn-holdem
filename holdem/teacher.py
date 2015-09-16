@@ -27,10 +27,10 @@ class Teacher(object):
             self.hof = f.read().splitlines()
 
         self.test_pool = []
-        # add 1000 random hof networks to test pool
+        # add 10000 random hof networks to test pool
         for _ in range(min(1000, len(self.hof))):
             self.test_pool.append(random.choice(self.hof))
-        # fill up the rest of the pool (to 2000) with random networks
+        # fill up the rest of the pool (to 20000) with random networks
         for _ in range(len(self.test_pool), 2000):
             self.test_pool.append(str(uuid.uuid4()))
         random.shuffle(self.test_pool)
@@ -42,17 +42,20 @@ class Teacher(object):
         self._run_thread.start()
 
     def run(self):
-        while self.test_pool:
+        print('HoF size:', len(self.hof))
+        while len(self.test_pool)>=6:
+            print('test pool:', len(self.test_pool))
             self.reset_game()
             self.table.run_game()
+        print('Done with this batch of subjects')
 
     def add_winner(self, winner_uuid):
         if winner_uuid not in [-1, None, 1,2,3]:
             self.log_id(winner_uuid)
             # self.winners.append(winner_uuid)
-            for p in self.players:
-                if p.get_ai_id() == winner_uuid:
-                    p.save_ai_state()
+        for p in self.players:
+            if p.get_ai_id() == winner_uuid:
+                p.save_ai_state()
 
     def reset_game(self):
         for p in self.players:

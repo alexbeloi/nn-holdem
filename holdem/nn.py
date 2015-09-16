@@ -35,4 +35,4 @@ class NeuralNetwork(object):
 
     @staticmethod
     def activation_function(x):
-        return np.tanh(x)
+        return 1/(1+np.exp(-x))

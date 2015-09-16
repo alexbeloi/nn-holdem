@@ -151,8 +151,8 @@ class PlayerControl(object):
             if self._ai_type == 0:
                 # neural network output
                 bet_size = self.ai.act(table_state)
-                bet_size += table_state.get('bigblind') - (bet_size % table_state.get('bigblind'))
-                print('ai bet_size', bet_size)
+                # round down bet_size to nearest bigblind
+                bet_size -= (bet_size % table_state.get('bigblind'))
             elif self._ai_type == 1:
                 # check/fold bot
                 bet_size = 0
