@@ -27,10 +27,10 @@ class Teacher(object):
             self.hof = f.read().splitlines()
 
         self.test_pool = []
-        # add 10000 random hof networks to test pool
+        # add 1000 random hof networks to test pool
         for _ in range(min(1000, len(self.hof))):
             self.test_pool.append(random.choice(self.hof))
-        # fill up the rest of the pool (to 20000) with random networks
+        # fill up the rest of the pool (to 2000) with random networks
         for _ in range(len(self.test_pool), 2000):
             self.test_pool.append(str(uuid.uuid4()))
         random.shuffle(self.test_pool)

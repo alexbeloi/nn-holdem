@@ -1,11 +1,13 @@
 import numpy as np
+import os
 
 class NeuralNetwork(object):
+    SAVE_DIR = os.getcwd() + '/data/'
     def __init__(self, input_size, dim, networkID):
         self.networkID = networkID
         self.dim = [input_size]+list(dim)
         try:
-            self.weight_matrix = np.load(str(networkID)+'.npy')
+            self.weight_matrix = np.load(NeuralNetwork.SAVE_DIR + str(networkID)+'.npy')
         except:
             self.weight_matrix = []
             weight_layer = np.random.rand(self.dim[1],self.dim[0])
@@ -27,7 +29,7 @@ class NeuralNetwork(object):
         return activations
 
     def save(self):
-        np.save(str(self.networkID)+'.npy', self.weight_matrix)
+        np.save(NeuralNetwork.SAVE_DIR + str(self.networkID)+'.npy', self.weight_matrix)
 
     def print_weights(self):
         for w in self.weight_matrix:
@@ -35,4 +37,4 @@ class NeuralNetwork(object):
 
     @staticmethod
     def activation_function(x):
-        return 1/(1+np.exp(-x))
+        return np.tanh(0.1*x)
