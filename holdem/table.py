@@ -109,20 +109,12 @@ class Table(object):
         self._round = 0
         while self._round<4 and len(players)>1:
             if self._round == 0:
-                # deal phase
-                # print('Dealing')
                 self.deal()
             elif self._round == 1:
-                # floph phase
-                # print('Flop')
                 self.flop()
             elif self._round == 2:
-                # turn phase
-                # print('Turn')
                 self.turn()
             elif self._round ==3:
-                # river phase
-                # print('River')
                 self.river()
 
             folded_players = []
@@ -173,16 +165,18 @@ class Table(object):
         self.reset()
 
     def increment_blinds(self):
-        self._blind_index = min(self._blind_index+1,len(Table.BLIND_INCREMENTS))
+        self._blind_index = min(self._blind_index+1,len(Table.BLIND_INCREMENTS)-1)
         [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[self._blind_index]
 
     def post_smallblind(self, player):
-        # print('player ', player.playerID, 'small blind', self._smallblind)
+        if not self._quiet:
+            print('player ', player.playerID, 'small blind', self._smallblind)
         self.player_bet(player, self._smallblind)
         player.playedthisround = False
 
     def post_bigblind(self, player):
-        # print('player ', player.playerID, 'big blind', self._bigblind)
+        if not self._quiet:
+            print('player ', player.playerID, 'big blind', self._bigblind)
         self.player_bet(player, self._bigblind)
         player.playedthisround = False
         self._lastraise = self._bigblind
@@ -259,10 +253,18 @@ class Table(object):
     def resolve_sidepots(self, players_playing):
         players = [p for p in players_playing if p.currentbet]
         # print('current bets: ', [p.currentbet for p in players])
+        # print('playing hand: ', [p.playing_hand for p in players])
         if not players:
             return
 
-        smallest_bet = min([p.currentbet for p in players if p.playing_hand])
+        try:
+            smallest_bet = min([p.currentbet for p in players if p.playing_hand])
+        except ValueError:
+            for p in players:
+                self._side_pots[self._current_sidepot] += p.currentbet
+                p.currentbet = 0
+            return
+
         smallest_players_allin = [p for p,bet in zip(players, [p.currentbet for p in players]) if bet == smallest_bet and p.isallin]
 
         for p in players:

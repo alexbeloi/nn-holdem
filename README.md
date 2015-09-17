@@ -10,7 +10,11 @@ The following things need to be built before the project is complete
 * ~~pot splitting~~
 * ~~incorporate hand rank evaluator~~ (using forked package [dueces](https://github.com/alexbeloi/deuces/tree/convert2to3) converted to python3)
 * ~~neural network~~
-* learning system
+* **learning system**
+  * ~~Hall of fame generator~~
+  * Child agent spawner
+  * Tournament system
+
 
 Additional (optional)
 
@@ -87,7 +91,7 @@ The current implementation is meant to simulate a cash game. In the future, we w
 
 The neural network uses mixed binary and continuous data.
 
-Based on the recommendation of some literature on modeling systems with mixed data, we use *effect coding* **{-1,1}** instead of *dummy coding* **{0,1}** for the binary variables. For the continuous variables, we normalize by the bigblind and center all values. Ideally we would center values around their means, for the stack sizes we can use the mean stack size at any given table but for other continuous inputs are more tricky (currently trying to center around mean stack size anyway).
+Based on the recommendation of some literature on modeling systems with mixed data, we use *effect coding* **{-1,1}** instead of *dummy coding* **{0,1}** for the binary variables. For the continuous variables (chip ammounts), we normalize by the bigblind and center all values. Ideally we would center values around their means, for the stack sizes we can use the mean stack size at any given table but for other continuous inputs we center around mean stack size.
 
 The activation function we're currently using is **tanh**, but since we aren't going to use backpropogation we may want to consider nondifferentiable activation functions.
 
@@ -99,24 +103,31 @@ The activation function we're currently using is **tanh**, but since we aren't g
 | To Call         | Amout of chips needed to add to pot in order stay in current hand of play |
 | Last Raise      | The most recent raise ammount for current round |
 | Player Stacks   | Ammount of chips(money) each player has |
-| BigBlind        | Size of minimum stake |
+| Win percentage  | Chance to win assuming all unknown cards are uniformly distributed |
 
 | Binary          | Description |
 | :---------------| :-----------|
 | Player position | Own position at the table |
-| Pocket cards    | Cards in personal hand |
-| Community cards | Shared cards available for all players to use |
-| Button          | Position of player last to act in a round, determines the order of betting |
+| Players in hand | Which players are still currently in the game |
+| Player betting  | Which player(s) is betting |
+
+Originally we tried to use binary data to represent pocket cards and community cards, this lead to too little variance on the part of the network. We were unable to select for any interesting behavior because the behavior was always the same (fold). We scaled down the problem by replacing the 200+ binary inputs (required to represent card data) with a proxy value representing the chance for the player to win (assuming all current and future unknown cards are uniformly random).
+
+For speed, we compute win percentage using a Monte Carlo simulation. The analyzer class is from [PokerTude](https://github.com/neynt/pokertude) adapted to use the [Deuces](https://github.com/alexbeloi/deuces/tree/convert2to3) Deck, Card and Evaluator classes for speedup.
+
+A more sophisticated approach would be to attach another neural network which tries to predict the opponents hands (e.g. http://www.spaz.ca/aaron/poker/nnpoker.pdf) and use this in place of a uniform distribution for the opponent's hand.
 
 ### Layers
 
-We expect the number of nodes needed in each layer to be about **80-X-1**. The output will be interpreted as a bet amount, which will then be parsed as either raise, call, check, fold.
+We use a **32-20-1** network. The output is interpreted as a bet amount as a percentage of the player's stack, which will then be parsed as either raise, call, check, fold.
 
-Alternative would be an **80-X-5** setup with the first four outputs in *[0,1]* denoting network confidence in raise, call, check, fold (resp.) and the last output denoting bet ammount normalized to personal stack or pot size.
+An alternative would be an **32-20-5** setup with the first four outputs in *[0,1]* denoting network confidence in raise, call, check, fold (resp.) and the last output denoting bet ammount normalized to personal stack or pot size.
 
 ### Learning
 
-We plan to teach networks through coevolution + hall-of-fame. We spawn *~10000* random networks and have them compete with each other in 8-seat tables, we pick the top *100* networks and use them to spawn *10000* additional child agents through randomly biased averaging of the parent's weights and repeat with new generation of child agents + hall-of-famers.
+We plan to teach networks through coevolution + hall-of-fame. We spawn *~2000* random networks and have them compete with each other in 8-seat tables. Each table also has two hard-coded bots, one which is *check/call* only and one which bets a uniformly *random* amount each turn. If a neural network wins a table (is the last remaining player), we save this network to the hall of fame.
+
+Once a substantial hall-of-fame is generated, we use the hall-of-famers to generate child agents. The child agent's weights are a biased sum of the weights of the parents.
 
 The hall-of-fame agents are always preserved and never fall out of use. As the hall-of-fame becomes large, we randomly choose which hall-of-famers to include in the next generation, but the total pool of hall-of-famers is never allowed to diminish.
 

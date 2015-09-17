@@ -10,7 +10,6 @@ class HoldemAI(NeuralNetwork):
     def act(self, table_state):
         parsed = self.input_parser(table_state)
         activated = self.activate(parsed)[-1][0]
-        print('activated2', activated)
         rescaled = self.rescale_output(activated)
         return rescaled
 
