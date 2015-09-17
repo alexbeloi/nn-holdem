@@ -173,7 +173,7 @@ class Table(object):
         self.reset()
 
     def increment_blinds(self):
-        self._blind_index = min(self._blind_index+1,3)
+        self._blind_index = min(self._blind_index+1,len(Table.BLIND_INCREMENTS))
         [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[self._blind_index]
 
     def post_smallblind(self, player):

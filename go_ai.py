@@ -24,5 +24,5 @@ seats = 8
 #
 #     time.sleep(1)
 
-teacher = Teacher(seats, True)
+teacher = Teacher(seats, False)
 teacher_proxy = TeacherProxy(teacher)

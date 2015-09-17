@@ -1,15 +1,16 @@
 import numpy as np
 from .nn import NeuralNetwork
+from .analyzer import Analyzer
 
 class HoldemAI(NeuralNetwork):
     def __init__(self, ID):
-        super().__init__(257, [258,200,1], ID)
-        self.chip_mean = 0
-        self.chip_stdev = 0
+        super().__init__(31, [32,20,1], ID)
+        self.analyzer = Analyzer()
 
     def act(self, table_state):
         parsed = self.input_parser(table_state)
         activated = self.activate(parsed)[-1][0]
+        print('activated2', activated)
         rescaled = self.rescale_output(activated)
         return rescaled
 
@@ -30,10 +31,20 @@ class HoldemAI(NeuralNetwork):
         # need to make copy of list so that we don't edit table_state permanently
         players = [[i for i in j] for j in players]
 
-        # binary data
-        hand_bin = [j for i in [HoldemAI.card_to_binlist(c) for c in hand] for j in i]
-        community = community + [0]*(5-len(community))
-        comm_bin = [j for i in [HoldemAI.card_to_binlist(c) for c in community] for j in i]
+        # setup analyzer
+        self.analyzer.set_num_opponents(len(players)-1)
+        self.analyzer.set_pocket_cards(*hand)
+        for card in community:
+            self.analyzer.community_card(card)
+
+        # computes win percentage as proxy for hand data and community data
+        win_percent = self.analyzer.analyze()
+        self.analyzer.reset()
+
+        # # binary data
+        # hand_bin = [j for i in [HoldemAI.card_to_binlist(c) for c in hand] for j in i]
+        # community = community + [0]*(5-len(community))
+        # comm_bin = [j for i in [HoldemAI.card_to_binlist(c) for c in community] for j in i]
         my_seat_bin = HoldemAI.bin_to_binlist(bin(my_seat)[2:].zfill(3))
 
         # continuous data
@@ -65,19 +76,20 @@ class HoldemAI(NeuralNetwork):
         # treated same as tocall
         lastraise_centered = (lastraise-8/3)/self.chip_range
 
+        # center win percentage
+        win_percent_centered = (win_percent-0.5)*2
+
         # combine binary and continuous data into one vector
 
-        # hand_bin uses 29*2 = 58 inputs
-        # comm_bin uses 29*5 = 145 inputs
         # my_seat_bin  uses 3 inputs
-        inputs_bin = hand_bin + comm_bin + my_seat_bin
+        inputs_bin = my_seat_bin
 
-        # pot_centered, tocall_centered, lastraise_centered each use 1 input
-        inputs_cont = [pot_centered, tocall_centered, lastraise_centered]
+        # pot_centered, tocall_centered, lastraise_centered, win_percent_centered each use 1 input
+        inputs_cont = [pot_centered, tocall_centered, lastraise_centered, win_percent_centered]
 
-        # each player addes 1 continuous input, and 3+2 binary inputs
+        # each player addes 1 continuous input, and 2 binary inputs
         for p in players:
-            inputs_bin = inputs_bin + p[0] + p[2] + p[3]
+            inputs_bin = inputs_bin + p[2] + p[3]
             inputs_cont = inputs_cont + p[1]
 
         inputs = HoldemAI.center_bin(inputs_bin) + inputs_cont
@@ -87,11 +99,6 @@ class HoldemAI(NeuralNetwork):
         # output of neural network is given from -1 to 1, we interpret this as a bet ammount as a percentage of the player's stack
         return int((num+1)*self.my_stack/2)
 
-    # def rescale(self, num):
-    #     return int((num-self.chip_mean)/(self.chip_stdev*25*np.sqrt(2*np.pi)))
-    #
-    # def descale(self, num):
-    #     return int(num*(self.chip_stdev*25*np.sqrt(2*np.pi))+self.chip_mean)
 
     # takes card from deuces Card class (reprsented by int) and gives its 29 digit binary representation in a list, first 3 bits are unused
     @staticmethod
