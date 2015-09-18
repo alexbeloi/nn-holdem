@@ -83,8 +83,8 @@ class Table(object):
                         self.teacher.add_winner(winner.server.get_ai_id())
                     break
 
-                if self._number_of_hands == 500:
-                    print('no winner in 500 hands')
+                if self._number_of_hands == 200:
+                    print('no winner in 200 hands')
                     break
 
     def start_hand(self, players):
@@ -252,8 +252,8 @@ class Table(object):
 
     def resolve_sidepots(self, players_playing):
         players = [p for p in players_playing if p.currentbet]
-        # print('current bets: ', [p.currentbet for p in players])
-        # print('playing hand: ', [p.playing_hand for p in players])
+        print('current bets: ', [p.currentbet for p in players])
+        print('playing hand: ', [p.playing_hand for p in players])
         if not players:
             return
 
@@ -275,7 +275,7 @@ class Table(object):
         if smallest_players_allin:
             self._current_sidepot += 1
             self.resolve_sidepots(players)
-        # print('sidepots: ', self._side_pots)
+        print('sidepots: ', self._side_pots)
 
     def new_round(self):
         for player in self._player_dict.values():
@@ -325,10 +325,6 @@ class Table(object):
         for player in self._seats:
             if not player.emptyplayer and not player.sitting_out:
                 player.reset_hand()
-                # join new player when they lose by default
-                if not player.stack:
-                    # print('player', player.playerID, 'stack', player.stack)
-                    player.server.rejoin_new()
         self.community = []
         self._current_sidepot = 0
         self._totalpot = 0

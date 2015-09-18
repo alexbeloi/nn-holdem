@@ -46,7 +46,10 @@ class PlayerControl(object):
             print('AI type ', self._ai_type, 'won')
 
     def new_ai(self, ai_id):
-        self.ai = HoldemAI(ai_id) # defaults to random network if ai_id not recognized
+        if ai_id == 'unchanged':
+            pass
+        else:
+            self.ai = HoldemAI(ai_id) # defaults to random network if ai_id not recognized
 
     def add_player(self):
         # print('Player', self.playerID, 'joining game')
@@ -97,11 +100,16 @@ class PlayerControl(object):
         self._stack = table_state.get('stack')
         self._hand = table_state.get('pocket')
 
+    # cleanup
     def player_move(self, table_state):
+        self.print_table(table_state)
         self.update_localstate(table_state)
+        bigblind = table_state.get('bigblind')
         tocall = min(table_state.get('tocall', None),self._stack)
         minraise = table_state.get('minraise', None)
+        print('minraise ', minraise)
         move_tuple = ('Exception!',-1)
+
         # ask this human meatbag what their move is
         if not self._ai_flag:
             self.print_table(table_state)
@@ -141,51 +149,56 @@ class PlayerControl(object):
                 else:
                     move_tuple = ('call', tocall)
 
-
         # feed table state to ai and get a response
         else:
             # neural network output
-            # bet_size = self.ai.act(table_state)
-            # bet_size += table_state.get('bigblind') - (bet_size % table_state.get('bigblind'))
-
             if self._ai_type == 0:
                 # neural network output
-                bet_size = self.ai.act(table_state)
-                # round down bet_size to nearest bigblind)
-                bet_size -= (bet_size % table_state.get('bigblind'))
+                move_tuple = self.ai.act(table_state)
+
             elif self._ai_type == 1:
                 # check/fold bot
-                bet_size = 0
+                if tocall > 0:
+                    move_tuple = ('fold',-1)
+                else:
+                    move_tuple = ('check', 0)
             elif self._ai_type == 2:
                 # check/call bot
-                bet_size = tocall
+                if tocall > 0:
+                    move_tuple = ('call',tocall)
+                else:
+                    move_tuple = ('check', 0)
             else:
-                # random bot
-                bet_size = np.random.randint(0,self._stack)
-                bet_size += table_state.get('bigblind') - (bet_size % table_state.get('bigblind'))
+                if tocall >0:
+                    # 0 - Raise
+                    # 1 - Call
+                    # 2 - Fold
+                    move_idx = np.random.randint(0,2)
+                    if move_idx == 0:
+                        try:
+                            bet_size = np.random.randint(minraise, self._stack)
+                        except:
+                            bet_size = self._stack
+                        bet_size += bigblind - (bet_size % bigblind)
+                        move_tuple = ('raise', bet_size)
+                    elif move_idx == 1:
+                        move_tuple = ('call', tocall)
+                    else:
+                        move_tuple = ('fold', -1)
+                else:
+                    # 0 - Raise
+                    # 1 - Check
+                    move_idx = np.random.randint(0,1)
+                    if move_idx == 0:
+                        try:
+                            bet_size = np.random.randint(minraise,max(self._stack, minraise))
+                        except:
+                            bet_size = self._stack
+                        bet_size += bigblind - (bet_size % bigblind)
+                        move_tuple = ('raise', bet_size)
+                    else:
+                        move_tuple = ('check',0)
 
-
-            bet_size = min(bet_size, self._stack)
-            # print('ai bet', bet_size, self.playerID)
-            if bet_size < tocall:
-                if bet_size >= self._stack:
-                    move_tuple = ('call', self._stack)
-                elif not tocall:
-                    move_tuple = ('check', 0)
-                else:
-                    move_tuple = ('fold',-1)
-            elif bet_size > tocall:
-                if bet_size >= minraise:
-                    move_tuple = ('raise', min(bet_size, self._stack))
-                else:
-                    move_tuple = ('call', tocall)
-            elif bet_size == tocall:
-                if tocall:
-                    move_tuple = ('call', tocall)
-                else:
-                    move_tuple = ('check', 0)
-        # self.print_table(table_state)
-        # print('bet_size:', bet_size)
         return move_tuple
 
 class PlayerControlProxy(object):
@@ -210,8 +223,8 @@ class PlayerControlProxy(object):
     def join(self):
         self._player.add_player()
 
-    def rejoin_new(self, ai_type = 'unchanged'):
-        self._player.rejoin_new(ai_type)
+    def rejoin_new(self, ai_id = 'unchanged'):
+        self._player.rejoin_new(ai_id)
 
     def rejoin(self, ai_type = 0):
         self._player.rejoin()
