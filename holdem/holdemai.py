@@ -4,14 +4,15 @@ from .analyzer import Analyzer
 
 class HoldemAI(NeuralNetwork):
     def __init__(self, ID):
-        super().__init__(31, [32,20,1], ID)
+        super().__init__([31,20,5], ID)
         self.analyzer = Analyzer()
 
     def act(self, table_state):
         parsed = self.input_parser(table_state)
-        activated = self.activate(parsed)[-1][0]
-        rescaled = self.rescale_output(activated)
-        return rescaled
+        activated = list(self.activate(parsed))
+        # output vector interpreted as (raise, call, check, fold, bet_ammount)
+        activated[-1] = self.rescale_output(activated[-1])
+        return self.output_parser(activated, table_state)
 
     # parses table_state from TableProxy into clean (mostly binary) data for neural network
     def input_parser(self, table_state):
@@ -31,7 +32,7 @@ class HoldemAI(NeuralNetwork):
         players = [[i for i in j] for j in players]
 
         # setup analyzer
-        self.analyzer.set_num_opponents(len(players)-1)
+        self.analyzer.set_num_opponents(sum([1 for p in players if p[2]]))
         self.analyzer.set_pocket_cards(*hand)
         for card in community:
             self.analyzer.community_card(card)
@@ -98,6 +99,41 @@ class HoldemAI(NeuralNetwork):
         # output of neural network is given from -1 to 1, we interpret this as a bet ammount as a percentage of the player's stack
         return int((num+1)*self.my_stack/2)
 
+    # parses output for PlayerControl
+    def output_parser(self, response, table_state):
+        tocall = table_state.get('tocall', None)
+        my_stack = table_state.get('players')[table_state.get('my_seat')][1]
+        bigblind = table_state.get('bigblind', None)
+        minraise = table_state.get('minraise', None)
+
+        bet_size = response[-1]
+        bet_size += bigblind -(bet_size % bigblind)
+        bet_size = max(bet_size, my_stack)
+        # response[0:4] = [raise_confidence, call_confidence, check_confidence, fold_confidence]
+        if tocall > 0:
+            # choose between raise, call, fold
+            move_idx = np.argmax(response[:2] + response[3:-1])
+            # 0 - Raise
+            # 1 - Call
+            # 3 - Fold
+            if move_idx == 0:
+                if bet_size < minraise:
+                    return ('call', tocall)
+                if tocall >= my_stack or tocall >= bet_size:
+                    return ('call', tocall)
+                return ('raise', min(max(bet_size, minraise), my_stack))
+            elif move_idx == 1:
+                return ('call', tocall)
+            else:
+                return ('fold', -1)
+        else:
+            # 0 - Raise
+            # 2 - Check
+            move_idx = np.argmax(response[:1] + response[2:-2])
+            if move_idx == 0:
+                return ('raise', bet_size)
+            else:
+                return ('check', 0)
 
     # takes card from deuces Card class (reprsented by int) and gives its 29 digit binary representation in a list, first 3 bits are unused
     @staticmethod
