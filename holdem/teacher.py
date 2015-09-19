@@ -29,7 +29,7 @@ class Teacher(object):
 
         # create test pool
         self.test_pool = []
-        self.populate_pool(hof,2000,total)
+        self.populate_pool(hof,hof,total)
 
         self.fitness_dic = OrderedDict([(p,0) for p in self.test_pool])
 
