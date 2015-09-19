@@ -3,5 +3,5 @@ import time
 
 seats = 8
 
-teacher = Teacher(seats, 2000, 1000, False)
+teacher = Teacher(seats, 2000, 2000, True)
 teacher_proxy = TeacherProxy(teacher)
