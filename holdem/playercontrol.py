@@ -177,10 +177,13 @@ class PlayerControl(object):
                     if move_idx == 0:
                         try:
                             bet_size = np.random.randint(minraise, self._stack)
+                            bet_size -= bet_size % bigblind
                         except:
                             bet_size = self._stack
-                        bet_size += bigblind - (bet_size % bigblind)
-                        move_tuple = ('raise', bet_size)
+                        if bet_size <= tocall:
+                            move_tuple = ('call', tocall)
+                        else:
+                            move_tuple = ('raise', bet_size)
                     elif move_idx == 1:
                         move_tuple = ('call', tocall)
                     else:
@@ -191,10 +194,10 @@ class PlayerControl(object):
                     move_idx = np.random.randint(0,1)
                     if move_idx == 0:
                         try:
-                            bet_size = np.random.randint(minraise,max(self._stack, minraise))
+                            bet_size = np.random.randint(minraise, self._stack)
+                            bet_size -= bet_size % bigblind
                         except:
                             bet_size = self._stack
-                        bet_size += bigblind - (bet_size % bigblind)
                         move_tuple = ('raise', bet_size)
                     else:
                         move_tuple = ('check',0)
