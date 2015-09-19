@@ -89,10 +89,7 @@ class Table(object):
 
     def start_hand(self, players):
         players = [p for p in players if p.playing_hand]
-        # if not self._quiet:
-        #     if sum([p.stack for p in players]) != 2000*len(self._seats):
-        #         print('sum:', sum([p.stack for p in players]))
-        #         raise ValueError('stacks are not adding up')
+        assert sum([p.stack for p in players]) == 2000*len(self._seats)
         self.new_round()
         self._round=0
 
@@ -137,7 +134,7 @@ class Table(object):
                         print('Player', player.playerID, move)
                     player = self._next(players, player)
                 elif move[0] == 'raise':
-                    self.player_bet(player, move[1])
+                    self.player_bet(player, move[1]+player.currentbet)
                     if not self._quiet:
                         print('Player', player.playerID, move)
                     for p in players:
@@ -156,10 +153,15 @@ class Table(object):
                     if len(players) ==1:
                         break
 
+                if not self._quiet:
+                    print('current bets: ', [p.currentbet for p in players])
 
             player = self._first_to_act(players)
             self.resolve_sidepots(players + folded_players)
             self.new_round()
+            if not self._quiet:
+                print('totalpot', self._totalpot)
+            assert sum([p.stack for p in self._seats]) + self._totalpot == 2000*len(self._seats)
 
         self.resolve_game(players)
         self.reset()
@@ -189,6 +191,8 @@ class Table(object):
 
         self._totalpot += relative_bet
         self._tocall = max(self._tocall, total_bet)
+        if self._tocall >0:
+            self._tocall = max(self._tocall, self._bigblind)
         self._lastraise = max(self._lastraise, relative_bet  - self._lastraise)
 
     def _first_to_act(self, players):
@@ -224,7 +228,6 @@ class Table(object):
     def add_player(self, host, port, playerID, name, stack):
         if playerID not in self._player_dict:
             new_player = Player(host, port, playerID, name, stack)
-            # new_player.playing_hand = True # default to have new players start playing
             for i,player in enumerate(self._seats):
                 if player.emptyplayer:
                     self._seats[i] = new_player
@@ -242,21 +245,20 @@ class Table(object):
 
     def remove_player(self, playerID):
         try:
-            if playerID in self._player_dict:
-                idx = self._seats.index(self._player_dict[playerID])
-                self._seats[idx] = Player(-1,-1,0,'empty',0,True)
-                del self._player_dict[playerID]
-                self.emptyseats += 1
+            idx = self._seats.index(self._player_dict[playerID])
+            self._seats[idx] = Player(-1,-1,0,'empty',0,True)
+            del self._player_dict[playerID]
+            self.emptyseats += 1
         except ValueError:
             pass
 
     def resolve_sidepots(self, players_playing):
         players = [p for p in players_playing if p.currentbet]
-        print('current bets: ', [p.currentbet for p in players])
-        print('playing hand: ', [p.playing_hand for p in players])
+        if not self._quiet:
+            print('current bets: ', [p.currentbet for p in players])
+            print('playing hand: ', [p.playing_hand for p in players])
         if not players:
             return
-
         try:
             smallest_bet = min([p.currentbet for p in players if p.playing_hand])
         except ValueError:
@@ -275,7 +277,8 @@ class Table(object):
         if smallest_players_allin:
             self._current_sidepot += 1
             self.resolve_sidepots(players)
-        print('sidepots: ', self._side_pots)
+        if not self._quiet:
+            print('sidepots: ', self._side_pots)
 
     def new_round(self):
         for player in self._player_dict.values():
