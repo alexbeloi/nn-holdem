@@ -12,7 +12,7 @@ The following things need to be built before the project is complete
 * ~~neural network~~
 * **learning system**
   * ~~Hall of fame generator~~
-  * Child agent spawner
+  * ~~Child agent spawner~~
   * Tournament system
 
 
@@ -119,17 +119,15 @@ A more sophisticated approach would be to attach another neural network which tr
 
 ### Layers
 
-We use a **32-20-1** network. The output is interpreted as a bet amount as a percentage of the player's stack, which will then be parsed as either raise, call, check, fold.
-
-An alternative would be an **32-20-5** setup with the first four outputs in *[0,1]* denoting network confidence in raise, call, check, fold (resp.) and the last output denoting bet ammount normalized to personal stack or pot size.
+We use a **32-20-5** setup with the first four outputs in *[0,1]* denoting network confidence in raise, call, check, fold (resp.) and the last output denoting bet ammount normalized to personal stack or pot size.
 
 ### Learning
 
-We plan to teach networks through coevolution + hall-of-fame. We spawn *~2000* random networks and have them compete with each other in 8-seat tables. Each table also has two hard-coded bots, one which is *check/call* only and one which bets a uniformly *random* amount each turn. If a neural network wins a table (is the last remaining player), we save this network to the hall of fame.
+We learn through coevolution + hall-of-fame. We spawn *~2000* random networks and have them compete with each other in 8-seat tables. Each table also has two hard-coded bots, one which is *check/call* only and one which bets a uniformly *random* amount each turn. If a neural network wins a table (is the last remaining player), we save this network to the hall of fame and have it continue competing.
 
-Once a substantial hall-of-fame is generated, we use the hall-of-famers to generate child agents. The child agent's weights are a biased sum of the weights of the parents.
+Once a substantial hall-of-fame is generated, we use the hall-of-famers to generate child agents. A child agent's weights are a biased sum of the weights of the parents.
 
-The hall-of-fame agents are always preserved and never fall out of use. As the hall-of-fame becomes large, we randomly choose which hall-of-famers to include in the next generation, but the total pool of hall-of-famers is never allowed to diminish.
+The hall-of-fame agents are always preserved and never fall out of use. As the hall-of-fame becomes large, we (uniformly) randomly choose hall-of-famers to include in the next epoch, but the total pool of hall-of-famers is never allowed to diminish.
 
 ## Literature
 * coevolution and hall-of-fame heuristics:
