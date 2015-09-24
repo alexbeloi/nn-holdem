@@ -132,5 +132,7 @@ The hall-of-fame agents are always preserved and never fall out of use. As the h
 ## Literature
 * coevolution and hall-of-fame heuristics:
 http://www2.cs.uregina.ca/~hilder/refereed_conference_proceedings/cig09.pdf
+* optimal learning rate:
+http://arxiv.org/pdf/1206.1106.pdf
 * Overview of artificial intelligence strategies for texas hold'em poker: http://poker-ai.org/archive/pokerai.org/public/aith.pdf
 * New York Times article on computer poker: http://www.nytimes.com/2013/09/08/magazine/poker-computer.html?_r=0
