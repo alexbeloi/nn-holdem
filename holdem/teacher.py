@@ -11,8 +11,10 @@ from .nn import NeuralNetwork
 from .playercontrol import PlayerControl, PlayerControlProxy
 
 class Teacher(object):
-    def __init__(self, seats, hof, total, quiet = False):
+    def __init__(self, seats, n_hof, n_total, quiet = False):
         self.seats = seats
+        self.n_hof = n_hof
+        self.n_total = n_total
         self.table = TableProxy(Table(seats, quiet, True))
         self.players = []
 
@@ -23,31 +25,33 @@ class Teacher(object):
         self.add_randombot()
         self.add_nncontrollers()
 
-        # populate hall of fame
-        with open(self.log_file) as f:
-            self.hof = f.read().splitlines()
-
-        # create test pool
-        self.test_pool = []
-        self.populate_pool(hof,hof,total)
-
-        self.fitness_dic = OrderedDict([(p,0) for p in self.test_pool])
-
-
         self._run_thread = Thread(target = self.run, args=())
         self._run_thread.daemon = True
         self._run_thread.start()
 
     def run(self):
-        print('HoF size:', len(self.hof))
-        temp = self.test_pool.pop()
-        while len(self.test_pool)>=6:
-            self.reset_game()
-            self.table.run_game()
-            self.print_dic()
-            print('test pool size: ', len(self.test_pool))
-        print('Done with this batch of subjects, saving fitness')
-        self.save_dic()
+        epoch = 0
+        while epoch<1000:
+            # populate hall of fame
+            with open(self.log_file) as f:
+                self.hof = f.read().splitlines()
+
+            # create test pool
+            self.test_pool = []
+            self.populate_pool(self.n_hof,self.n_hof,self.n_total)
+            self.fitness_dic = OrderedDict([(p,0) for p in self.test_pool])
+
+            print('HoF size:', len(self.hof))
+            print('Test pool size: ', len(self.test_pool))
+            while len(self.test_pool)>=6:
+                self.reset_game()
+                self.table.run_game()
+                # self.print_dic()
+                print('Test pool size: ', len(self.test_pool))
+            print('Done with this batch of subjects, saving fitness')
+            self.save_dic()
+
+            epoch += 1
 
     def save_dic(self):
         self.fitness_dic = OrderedDict(sorted(self.fitness_dic.items(), key=lambda t: t[1]))

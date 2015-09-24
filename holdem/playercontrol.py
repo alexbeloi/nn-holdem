@@ -102,13 +102,12 @@ class PlayerControl(object):
 
     # cleanup
     def player_move(self, table_state):
-        self.print_table(table_state)
         self.update_localstate(table_state)
         bigblind = table_state.get('bigblind')
         tocall = min(table_state.get('tocall', None),self._stack)
         minraise = table_state.get('minraise', None)
-        print('minraise ', minraise)
-        move_tuple = ('Exception!',-1)
+        # print('minraise ', minraise)
+        # move_tuple = ('Exception!',-1)
 
         # ask this human meatbag what their move is
         if not self._ai_flag:
