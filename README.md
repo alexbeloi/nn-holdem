@@ -14,10 +14,9 @@ The following things need to be built before the project is complete
   * ~~Hall of fame generator~~
   * ~~Child agent spawner~~
   * ~~Tournament system~~
+* Faster rank evaluator
 
-
-Additional (optional)
-
+Additional
 * learning from existing real world game history
 * competition heuristics
 
