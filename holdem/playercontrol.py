@@ -45,6 +45,10 @@ class PlayerControl(object):
         else:
             print('AI type ', self._ai_type, 'won')
 
+    def delete_ai(self):
+        if self._ai_type == 0:
+            self.ai.delete()
+
     def new_ai(self, ai_id):
         if ai_id == 'unchanged':
             pass
@@ -236,6 +240,9 @@ class PlayerControlProxy(object):
 
     def save_ai_state(self):
         self._player.save_ai_state()
+
+    def delete_ai(self):
+        self._player.delete_ai()
 
     def quit(self):
         self._player.server.remove_player(self._player.playerID)

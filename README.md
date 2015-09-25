@@ -10,16 +10,19 @@ The following things need to be built before the project is complete
 * ~~pot splitting~~
 * ~~incorporate hand rank evaluator~~ (using forked package [dueces](https://github.com/alexbeloi/deuces/tree/convert2to3) converted to python3)
 * ~~neural network~~
-* **learning system**
+* ~~**learning system**~~
   * ~~Hall of fame generator~~
   * ~~Child agent spawner~~
   * ~~Tournament system~~
 
 Additional
-* Faster rank evaluator
+* Faster rank evaluator and/or win percentage analyzer
 * GUI frontend for human player
 * learning from existing real world game history
 * competition heuristics
+
+Possible Branches
+* Feed raw card data into neural network instead of pre-processing hand quality
 
 ### Usage
 Running from play.py is simplest way to test things out (although the ai opponents are just random for now)
@@ -85,7 +88,7 @@ Currently designed to save the weight matrix (.npy) of the neural network if an 
 
 We built a basic single table no limit hold'em game. Both dealer and player run a SimpleXMLRPCServer to network board state and player moves.
 
-The current implementation is meant to simulate a cash game. In the future, we will expand to accomodate multi-table tournament play.
+The current implementation is meant to simulate a cash game.
 
 ## Neural network
 
@@ -123,7 +126,7 @@ We use a **32-20-5** setup with the first four outputs in *[0,1]* denoting netwo
 
 ### Learning
 
-We learn through coevolution + hall-of-fame. We spawn *~1000-2000* random networks and have them compete with each other in 8-seat tables. Each table also has two hard-coded bots, one which is *check/call* only and one a random bot. If a neural network wins a table (is the last remaining player), we save this network to the hall of fame and move it along in the tournament.
+We learn through coevolution + hall-of-fame. We spawn *~1000-2000* random networks and have them compete with each other in 8-seat tables. Each table also has two hard-coded bots, one of which is *check/call* only and one a random bot. If a neural network wins a table (is the last remaining player), then we save this network to the hall of fame and move it along to the next stage in the tournament.
 
 Once a substantial hall-of-fame is generated, we use the hall-of-famers to generate child agents. A child agent's weights are a biased sum of the weights of the parents.
 

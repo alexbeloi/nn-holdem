@@ -12,12 +12,8 @@ class NeuralNetwork(object):
             self.weights = np.load(NeuralNetwork.SAVE_DIR + str(networkID)+'_weights.npy')
             self.biases = np.load(NeuralNetwork.SAVE_DIR + str(networkID)+'_biases.npy')
         except:
-            try:
-                self.weights = np.load(NeuralNetwork.SAVE_DIR + 'children/' + str(networkID)+'_weights.npy')
-                self.biases = np.load(NeuralNetwork.SAVE_DIR + 'children/' + str(networkID)+'_biases.npy')
-            except:
-                self.weights = [np.random.randn(y,x)/np.sqrt(x) for x,y in zip(self.dim[:-1], self.dim[1:])]
-                self.biases = [np.random.randn(y,1) for y in self.dim[1:]]
+            self.weights = [np.random.randn(y,x)/np.sqrt(x) for x,y in zip(self.dim[:-1], self.dim[1:])]
+            self.biases = [np.random.randn(y,1) for y in self.dim[1:]]
 
     def activate(self, inputs):
         a = np.array([inputs]).transpose()
@@ -29,6 +25,10 @@ class NeuralNetwork(object):
     def save(self):
         np.save(NeuralNetwork.SAVE_DIR + str(self.networkID)+'_weights.npy', self.weights)
         np.save(NeuralNetwork.SAVE_DIR + str(self.networkID)+'_biases.npy', self.biases)
+
+    def delete(self):
+        os.remove(NeuralNetwork.SAVE_DIR + str(self.networkID)+'_weights.npy')
+        os.remove(NeuralNetwork.SAVE_DIR + str(self.networkID)+'_biases.npy')
 
     def print_weights(self):
         for w in self.weights:

@@ -57,35 +57,35 @@ class Table(object):
         self._number_of_hands = 1
 
         # start hand if table full
-        if len(players) == len(self._seats):
-            [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[0]
+        # if len(players) == len(self._seats):
+        [self._smallblind, self._bigblind] = Table.BLIND_INCREMENTS[0]
 
-            # keep playing until there's a single player (shotgun style)
-            while(self.emptyseats < len(self._seats)-1):
-                # answer = input('Press [enter] to start a game:')
-                # if not answer:
-                self.start_hand(players)
-                self._number_of_hands += 1
-                if not self._quiet:
-                    print('Starting game number: ', self._number_of_hands)
-                    for p in self._seats:
-                        if p.playing_hand:
-                            print('Player ',p.playerID, ' stack size: ', p.stack)
+        # keep playing until there's a single player (shotgun style)
+        while(self.emptyseats < len(self._seats)-1):
+            # answer = input('Press [enter] to start a game:')
+            # if not answer:
+            self.start_hand(players)
+            self._number_of_hands += 1
+            if not self._quiet:
+                print('Starting game number: ', self._number_of_hands)
+                for p in self._seats:
+                    if p.playing_hand:
+                        print('Player ',p.playerID, ' stack size: ', p.stack)
 
-                # increment blinds every 15 hands (based on avg hands/hour of 30)
-                if (self._number_of_hands % 15) == 0 and self._number_of_hands < 60:
-                    self.increment_blinds()
+            # increment blinds every 15 hands (based on avg hands/hour of 30)
+            if (self._number_of_hands % 15) == 0 and self._number_of_hands < 60:
+                self.increment_blinds()
 
 
-                if len([p for p in players if p.playing_hand]) == 1:
-                    winner = [p for p in players if p.playing_hand][0]
-                    if self._training:
-                        self.teacher.add_winner(winner.server.get_ai_id())
-                    break
+            if len([p for p in players if p.playing_hand]) == 1:
+                winner = [p for p in players if p.playing_hand][0]
+                if self._training:
+                    self.teacher.add_winner(winner.server.get_ai_id())
+                break
 
-                if self._number_of_hands == 200:
-                    print('no winner in 200 hands')
-                    break
+            if self._number_of_hands == 200:
+                print('no winner in 200 hands')
+                break
 
     def start_hand(self, players):
         players = [p for p in players if p.playing_hand]
