@@ -1,7 +1,7 @@
 # nn-holdem
 Code to build and teach a neural network to play a game of texas hold'em. The code includes a bare-bones hold'em table that even human players can play on via console.
 
-As of this writing, it has all of the features it needs to run a proper single table game against a set of ai opponents.
+As of this writing, it has all of the features originally intended to be designed.
 
 ### Current Status
 The following things need to be built before the project is complete
@@ -13,7 +13,7 @@ The following things need to be built before the project is complete
 * **learning system**
   * ~~Hall of fame generator~~
   * ~~Child agent spawner~~
-  * Tournament system
+  * ~~Tournament system~~
 
 
 Additional (optional)
@@ -123,7 +123,7 @@ We use a **32-20-5** setup with the first four outputs in *[0,1]* denoting netwo
 
 ### Learning
 
-We learn through coevolution + hall-of-fame. We spawn *~2000* random networks and have them compete with each other in 8-seat tables. Each table also has two hard-coded bots, one which is *check/call* only and one which bets a uniformly *random* amount each turn. If a neural network wins a table (is the last remaining player), we save this network to the hall of fame and have it continue competing.
+We learn through coevolution + hall-of-fame. We spawn *~1000-2000* random networks and have them compete with each other in 8-seat tables. Each table also has two hard-coded bots, one which is *check/call* only and one a random bot. If a neural network wins a table (is the last remaining player), we save this network to the hall of fame and move it along in the tournament.
 
 Once a substantial hall-of-fame is generated, we use the hall-of-famers to generate child agents. A child agent's weights are a biased sum of the weights of the parents.
 
