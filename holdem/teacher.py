@@ -28,17 +28,17 @@ class Teacher(Thread):
         self.add_randombot()
         self.add_nncontrollers()
 
+        self.read_in_fitness_log()
         # self._run_thread = Thread(target = self.run, args=())
         # self._run_thread.daemon = True
         # self._run_thread.start()
 
     def run(self):
         epoch = 0
-        while epoch < self.n_epochs:
-            # populate hall of fame
-            with open(self.log_file) as f:
-                self.hof = f.read().splitlines()
+        with open(self.log_file) as f:
+            self.hof = f.read().splitlines()
 
+        while epoch < self.n_epochs:
             # create test pool
             self.create_test_pool()
             self.winner_pool = []
@@ -56,16 +56,30 @@ class Teacher(Thread):
                 self.test_pool += self.winner_pool
                 self.winner_pool = []
             print('Done with this batch of subjects, saving fitness')
-            self.save_dic()
+            self.log_winners(self.test_pool)
+            # self.consolodate_fitness()
+            self.print_fittest(10)
             epoch += 1
 
-        self.consolodate_fitness()
-        self.print_fittest(10)
+    def read_in_fitness_log(self):
+        with open(self.fitness_log, 'r') as f:
+            fit_list = [line.strip().split(' ') for line in open(self.fitness_log)]
+            self.fitness_dic = dict([(item[1], item[0]) for item in fit_list])
 
     def create_test_pool(self):
         self.test_pool = []
-        self.populate_pool(self.n_hof, self.n_hof, self.n_total)
-        self.fitness_dic = OrderedDict([(p,0) for p in self.test_pool])
+        # add n_hof hall of fame agents
+        self.add_hof(self.n_hof)
+        # add n_hof child agents
+        self.add_children(self.n_hof)
+        # fill the rest with random agents
+        self.add_random(self.n_total - len(self.test_pool))
+
+        # shuffle pool
+        random.shuffle(self.test_pool)
+        for p in self.test_pool:
+            if p not in self.fitness_dic:
+                self.fitness_dic[p] = 0
 
     def consolodate_fitness(self):
         with open(self.fitness_log, 'r+') as f:
@@ -85,12 +99,19 @@ class Teacher(Thread):
         for i in range(1,n+1):
             print(fit_sorted[-i])
 
+    def log_winners(self, players):
+        with open(self.log_file, 'ab') as f:
+            for p in players:
+                f.write(bytes(p + '\n', 'UTF-8'))
+        self._write_fitness_log(players)
+
+    def _write_fitness_log(self, players):
+        with open(self.fitness_log, 'w') as f:
+            for p in players:
+                f.write(str(self.fitness_dic[p]) + ' ' + p + '\n')
+
     def save_dic(self):
         self.fitness_dic = OrderedDict(sorted(self.fitness_dic.items(), key=lambda t: t[1]))
-        with open(self.log_file, 'ab') as f:
-            for p in self.fitness_dic:
-                if self.fitness_dic[p]>0:
-                    f.write(bytes(str(p) + '\n', 'UTF-8'))
         with open(self.fitness_log, 'ab') as f:
             for p in self.fitness_dic:
                 f.write(bytes( str(self.fitness_dic[p]) + ' ' + p + '\n', 'UTF-8'))
@@ -98,13 +119,6 @@ class Teacher(Thread):
     def print_dic(self):
         for p in self.fitness_dic:
             print(p,':',self.fitness_dic[p])
-
-    def populate_pool(self, n_hof, n_children, n_random):
-        self.add_hof(n_hof)
-        self.add_children(n_children)
-        self.add_random(n_random)
-        # shuffle test_pool
-        random.shuffle(self.test_pool)
 
     def add_hof(self, n):
         for _ in range(min(n, len(self.hof))):
@@ -115,34 +129,45 @@ class Teacher(Thread):
             self.test_pool.append(str(uuid.uuid4()))
 
     def add_children(self, n):
-        for _ in range(n):
-            p1,p2 = random.sample(self.hof, 2)
-            self.test_pool.append(str(self.child(p1, p2)))
+        for _ in range(min(n, len(self.hof))):
+            try:
+                p1,p2 = random.sample(self.hof, 2)
+                self.test_pool.append(str(self.child(p1, p2)))
+            except:
+                print('hall of fame too small to create child agents')
 
+    # cleanup
     def add_winner(self, winner_uuid):
         for p in self.players:
             if p.get_ai_id() not in [None,1,2,3,'1','2','3']:
                 if p.get_ai_id() != winner_uuid:
                     self.fitness_dic[str(p.get_ai_id())] -= 1
+                    if p.get_ai_id() not in self.hof:
+                        try:
+                            p.delete_ai()
+                        except:
+                            pass
                 elif p.get_ai_id() == winner_uuid:
                     p.save_ai_state()
-                    self.fitness_dic[str(p.get_ai_id())] += 2
+                    self.fitness_dic[str(p.get_ai_id())] += 7
                     self.winner_pool.append(winner_uuid)
                     random.shuffle(self.test_pool)
 
     def child(self, p1, p2):
         child_uuid = uuid.uuid4()
+        try:
+            weight1 = np.load(NeuralNetwork.SAVE_DIR + p1 + '_weights.npy')
+            weight2 = np.load(NeuralNetwork.SAVE_DIR + p2 + '_weights.npy')
+            biases1 = np.load(NeuralNetwork.SAVE_DIR + p1 + '_biases.npy')
+            biases2 = np.load(NeuralNetwork.SAVE_DIR + p2 + '_biases.npy')
 
-        weight1 = np.load(NeuralNetwork.SAVE_DIR + p1 + '_weights.npy')
-        weight2 = np.load(NeuralNetwork.SAVE_DIR + p2 + '_weights.npy')
-        biases1 = np.load(NeuralNetwork.SAVE_DIR + p1 + '_biases.npy')
-        biases2 = np.load(NeuralNetwork.SAVE_DIR + p2 + '_biases.npy')
+            child_weights = average_arrays(weight1, weight2)
+            child_biases = average_arrays(biases1, biases2)
 
-        child_weights = average_arrays(weight1, weight2)
-        child_biases = average_arrays(biases1, biases2)
-
-        np.save(NeuralNetwork.SAVE_DIR + 'children/' + str(child_uuid) + '_weights.npy', child_weights)
-        np.save(NeuralNetwork.SAVE_DIR + 'children/' + str(child_uuid) + '_biases.npy', child_biases)
+            np.save(NeuralNetwork.SAVE_DIR + str(child_uuid) + '_weights.npy', child_weights)
+            np.save(NeuralNetwork.SAVE_DIR + str(child_uuid) + '_biases.npy', child_biases)
+        except:
+            pass
 
         return child_uuid
 
@@ -163,11 +188,6 @@ class Teacher(Thread):
     def add_nncontrollers(self):
         for i in range(4,self.seats+2):
             self.players.append(PlayerControlProxy(PlayerControl('localhost', 8000+i, i, True, 0)))
-
-
-    def log_id(self, ai_id):
-        with open(self.log_file, 'ab') as f:
-            f.write(bytes( str(self.fitness_dic[ai_id]) + ' ' + ai_id + '\n', 'UTF-8'))
 
 class TeacherProxy(object):
     def __init__(self, teacher):
