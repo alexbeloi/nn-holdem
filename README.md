@@ -1,5 +1,5 @@
 # nn-holdem
-Code to build and teach a neural network to play a game of texas hold'em. The code includes a bare-bones hold'em table that even human players can play on via console.
+Code to build and teach a neural network to play a game of texas hold'em. The code includes a bare-bones console hold'em table, neural network, and neural network trainer. A human players can play on via console but it would be nice to add a GUI frontend.
 
 As of this writing, it has all of the features originally intended to be designed.
 
@@ -14,9 +14,10 @@ The following things need to be built before the project is complete
   * ~~Hall of fame generator~~
   * ~~Child agent spawner~~
   * ~~Tournament system~~
-* Faster rank evaluator
 
 Additional
+* Faster rank evaluator
+* GUI frontend for human player
 * learning from existing real world game history
 * competition heuristics
 

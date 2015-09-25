@@ -10,11 +10,14 @@ from .table import Table, TableProxy
 from .nn import NeuralNetwork
 from .playercontrol import PlayerControl, PlayerControlProxy
 
-class Teacher(object):
-    def __init__(self, seats, n_hof, n_total, quiet = False):
+class Teacher(Thread):
+    def __init__(self, seats, n_hof, n_total, n_epochs, quiet = False):
+        super(Teacher, self).__init__()
+
         self.seats = seats
         self.n_hof = n_hof
         self.n_total = n_total
+        self.n_epochs = n_epochs
         self.table = TableProxy(Table(seats, quiet, True))
         self.players = []
 
@@ -25,33 +28,62 @@ class Teacher(object):
         self.add_randombot()
         self.add_nncontrollers()
 
-        self._run_thread = Thread(target = self.run, args=())
-        self._run_thread.daemon = True
-        self._run_thread.start()
+        # self._run_thread = Thread(target = self.run, args=())
+        # self._run_thread.daemon = True
+        # self._run_thread.start()
 
     def run(self):
         epoch = 0
-        while epoch<1000:
+        while epoch < self.n_epochs:
             # populate hall of fame
             with open(self.log_file) as f:
                 self.hof = f.read().splitlines()
 
             # create test pool
-            self.test_pool = []
-            self.populate_pool(self.n_hof,self.n_hof,self.n_total)
-            self.fitness_dic = OrderedDict([(p,0) for p in self.test_pool])
+            self.create_test_pool()
+            self.winner_pool = []
 
             print('HoF size:', len(self.hof))
             print('Test pool size: ', len(self.test_pool))
-            while len(self.test_pool)>=6:
-                self.reset_game()
-                self.table.run_game()
-                # self.print_dic()
-                print('Test pool size: ', len(self.test_pool))
+
+            while len(self.test_pool)+len(self.winner_pool) >= 6:
+                while len(self.test_pool) >= 6:
+                    self.reset_game()
+                    self.table.run_game()
+                    # self.print_dic()
+                    print('Test pool size: ', len(self.test_pool))
+                print('Adding winners to test pool')
+                self.test_pool += self.winner_pool
+                self.winner_pool = []
             print('Done with this batch of subjects, saving fitness')
             self.save_dic()
-
             epoch += 1
+
+        self.consolodate_fitness()
+        self.print_fittest(10)
+
+    def create_test_pool(self):
+        self.test_pool = []
+        self.populate_pool(self.n_hof, self.n_hof, self.n_total)
+        self.fitness_dic = OrderedDict([(p,0) for p in self.test_pool])
+
+    def consolodate_fitness(self):
+        with open(self.fitness_log, 'r+') as f:
+            fit_list = [line.strip().split(' ') for line in open(self.fitness_log)]
+            temp_dic = dict([(item[1], 0) for item in fit_list])
+            for item in fit_list:
+                temp_dic[item[1]] += int(item[0])
+            f.seek(0)
+            for k,v in temp_dic.items():
+                f.write(str(v) + ' ' + str(k) + '\n')
+            f.truncate()
+
+    def print_fittest(self, n):
+        fit_list = [line.strip().split(' ') for line in open(self.fitness_log)]
+        fit_sorted = sorted(fit_list, key=lambda item: int(item[0]))
+        print('Top ', n, 'fittest networks:')
+        for i in range(1,n+1):
+            print(fit_sorted[-i])
 
     def save_dic(self):
         self.fitness_dic = OrderedDict(sorted(self.fitness_dic.items(), key=lambda t: t[1]))
@@ -88,9 +120,6 @@ class Teacher(object):
             self.test_pool.append(str(self.child(p1, p2)))
 
     def add_winner(self, winner_uuid):
-        # if winner_uuid not in [-1, None, 1,2,3]:
-        #     self.log_id(winner_uuid)
-            # self.winners.append(winner_uuid)
         for p in self.players:
             if p.get_ai_id() not in [None,1,2,3,'1','2','3']:
                 if p.get_ai_id() != winner_uuid:
@@ -98,7 +127,7 @@ class Teacher(object):
                 elif p.get_ai_id() == winner_uuid:
                     p.save_ai_state()
                     self.fitness_dic[str(p.get_ai_id())] += 2
-                    self.test_pool.append(winner_uuid)
+                    self.winner_pool.append(winner_uuid)
                     random.shuffle(self.test_pool)
 
     def child(self, p1, p2):
