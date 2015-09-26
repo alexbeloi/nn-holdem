@@ -9,7 +9,7 @@ if __name__=='__main__':
     parser.add_argument('pool_size', type=int, default=100)
     parser.add_argument('epochs', type=int, default=1)
     parser.add_argument('--quiet', dest='quiet', action='store_true')
-    parser.set_defaults(quiet=False)
+    parser.set_defaults(quiet=True)
     args = parser.parse_args()
 
     teacher = Teacher(seats, int(args.pool_size/3), args.pool_size, args.epochs, args.quiet)

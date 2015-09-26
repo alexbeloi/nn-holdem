@@ -35,10 +35,10 @@ class Teacher(Thread):
 
     def run(self):
         epoch = 0
-        with open(self.log_file) as f:
-            self.hof = f.read().splitlines()
+
 
         while epoch < self.n_epochs:
+            self.read_in_hof()
             # create test pool
             self.create_test_pool()
             self.winner_pool = []
@@ -60,11 +60,16 @@ class Teacher(Thread):
             # self.consolodate_fitness()
             self.print_fittest(10)
             epoch += 1
+        print('finished')
+
+    def read_in_hof(self):
+        with open(self.log_file) as f:
+            self.hof = f.read().splitlines()
 
     def read_in_fitness_log(self):
         with open(self.fitness_log, 'r') as f:
             fit_list = [line.strip().split(' ') for line in open(self.fitness_log)]
-            self.fitness_dic = dict([(item[1], item[0]) for item in fit_list])
+            self.fitness_dic = dict([(item[1], int(item[0])) for item in fit_list])
 
     def create_test_pool(self):
         self.test_pool = []
@@ -96,25 +101,20 @@ class Teacher(Thread):
         fit_list = [line.strip().split(' ') for line in open(self.fitness_log)]
         fit_sorted = sorted(fit_list, key=lambda item: int(item[0]))
         print('Top ', n, 'fittest networks:')
-        for i in range(1,n+1):
+        for i in range(1,min(n+1, len(fit_sorted))):
             print(fit_sorted[-i])
 
+
     def log_winners(self, players):
-        with open(self.log_file, 'ab') as f:
+        with open(self.log_file, 'a') as f:
             for p in players:
-                f.write(bytes(p + '\n', 'UTF-8'))
+                f.write(p + '\n')
         self._write_fitness_log(players)
 
     def _write_fitness_log(self, players):
-        with open(self.fitness_log, 'w') as f:
+        with open(self.fitness_log, 'a') as f:
             for p in players:
                 f.write(str(self.fitness_dic[p]) + ' ' + p + '\n')
-
-    def save_dic(self):
-        self.fitness_dic = OrderedDict(sorted(self.fitness_dic.items(), key=lambda t: t[1]))
-        with open(self.fitness_log, 'ab') as f:
-            for p in self.fitness_dic:
-                f.write(bytes( str(self.fitness_dic[p]) + ' ' + p + '\n', 'UTF-8'))
 
     def print_dic(self):
         for p in self.fitness_dic:

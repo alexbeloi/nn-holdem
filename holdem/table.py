@@ -153,9 +153,6 @@ class Table(object):
                     if len(players) ==1:
                         break
 
-                if not self._quiet:
-                    print('current bets: ', [p.currentbet for p in players])
-
             player = self._first_to_act(players)
             self.resolve_sidepots(players + folded_players)
             self.new_round()
