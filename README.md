@@ -82,7 +82,7 @@ To call:  1475
 Choose your option:
 ```
 
-Currently designed to save the weight matrix (.npy) of the neural network if an ai opponent is the last left standing.
+For now, if you want to play against *smart* ai opponents, you'll have to run the ai trainer `go_ai.py` to start the training algorithm. This is a significant time investment, at some point I'll pre-include some trained networks.
 
 ### Holdem Implementation
 
