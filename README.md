@@ -15,14 +15,18 @@ The following things need to be built before the project is complete
   * ~~Child agent spawner~~
   * ~~Tournament system~~
 
-Additional
-* Faster rank evaluator and/or win percentage analyzer
-* GUI frontend for human player
+Additional (2nd stage)
+* Train seperate neural network to replace rank evaluator and/or win percentage analyzer
 * learning from existing real world game history
 * competition heuristics
 
-Possible Branches
-* Feed raw card data into neural network instead of pre-processing hand quality
+Strong potential branch
+* Use a Recurrent Neural Network with LSTM modules
+  * accept streams of data (turns)
+  * replace evolutionary learning with backpropogation through time (must faster)
+
+Bonus features
+* GUI frontend for human player
 
 ### Usage
 Running from play.py is simplest way to test things out (although the ai opponents are just random for now)
