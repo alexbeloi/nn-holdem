@@ -39,7 +39,6 @@ class NeuralNetwork(object):
         self.biases = [b + (-rate)*nb for b, nb in zip(self.biases, nabla_b)]
         self.weights = [w + (-rate)*nw for w, nw in zip(self.weights, nabla_w)]
 
-    # https://github.com/mnielsen/neural-networks-and-deep-learning
     def backpropogate(self, inputs, target_output):
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
@@ -54,14 +53,17 @@ class NeuralNetwork(object):
             nets = np.append(nets, net)
             activation = NeuralNetwork.sigmoid(net, self.slope)
             activations = np.append(activations, activation)
+        # implemented from notes: http://neuralnetworksanddeeplearning.com/chap2.html
         # backward
         delta = (activations[-1]-target_output)*NeuralNetwork.sigmoid_prime(nets[-1], self.slope)
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+        # nabla_w[-1] = np.dot(delta, activations[-2])
 
         for l in range(2, self.num_layers):
             net = nets[-l]
             sp = NeuralNetwork.sigmoid_prime(net, self.slope)
+            # delta = np.dot(np.dot(delta, np.array(self.weights[-l+1])), np.diag(list(sp)))
             delta = np.dot(np.array(self.weights[-l+1]).transpose(), delta)*sp
             nabla_b[-l] = delta
             nabla_w[-l] = np.dot(delta, activations[-l-1].transpose())
