@@ -16,7 +16,8 @@ The following things need to be built before the project is complete
   * ~~Tournament system~~
 
 Additional (2nd stage)
-* Train seperate neural network to replace rank evaluator and/or win percentage analyzer
+* ~~Train seperate neural network to replace rank evaluator and/or win percentage analyzer~~
+  * speed up training
 * learning from existing real world game history
 * competition heuristics
 
