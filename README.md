@@ -21,10 +21,11 @@ Additional (2nd stage)
 * learning from existing real world game history
 * competition heuristics
 
-Strong potential branch
+Strong potential branches
 * Use a Recurrent Neural Network with LSTM modules
   * accept streams of data (turns)
   * replace evolutionary learning with backpropogation through time (must faster)
+* Q-learning and MDPs seem perfect for poker, how to incorporate Q-learning into neural net?
 
 Bonus features
 * GUI frontend for human player
